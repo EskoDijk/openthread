@@ -170,7 +170,7 @@ void Server::ProcessQuery(Request &aRequest)
             ExitNow();
         }
 
-        LogWarn("Error forwarding to upstream: %s", ErrorToString(error));
+        LogWarnOnError(error, "forwarding to upstream");
 
         rcode = Header::kResponseServerFailure;
 
@@ -666,11 +666,6 @@ void Server::Response::IncResourceRecordCount(void)
     }
 }
 
-uint8_t Server::GetNameLength(const char *aName)
-{
-    return static_cast<uint8_t>(StringLength(aName, Name::kMaxNameLength));
-}
-
 #if OT_SHOULD_LOG_AT(OT_LOG_LEVEL_INFO)
 void Server::Response::Log(void) const
 {
@@ -974,10 +969,7 @@ void Server::ProxyQueryInfo::ReadFrom(const ProxyQuery &aQuery)
     SuccessOrAssert(aQuery.Read(aQuery.GetLength() - sizeof(ProxyQueryInfo), *this));
 }
 
-void Server::ProxyQueryInfo::RemoveFrom(ProxyQuery &aQuery) const
-{
-    SuccessOrAssert(aQuery.SetLength(aQuery.GetLength() - sizeof(ProxyQueryInfo)));
-}
+void Server::ProxyQueryInfo::RemoveFrom(ProxyQuery &aQuery) const { aQuery.RemoveFooter(sizeof(ProxyQueryInfo)); }
 
 void Server::ProxyQueryInfo::UpdateIn(ProxyQuery &aQuery) const
 {

@@ -123,6 +123,17 @@ otError otJoinerStart(otInstance      *aInstance,
                       void            *aContext);
 
 /**
+ * FIXME documentation
+ */
+void otJoinerSetCcmIdentity(otInstance    *aInstance,
+                            const uint8_t *aX509Cert,
+                            uint32_t       aX509Length,
+                            const uint8_t *aPrivateKey,
+                            uint32_t       aPrivateKeyLength,
+                            const uint8_t *aX509CaCertificateChain,
+                            uint32_t       aX509CaCertChainLength);
+
+/**
  * Disables the Thread Joiner role.
  *
  * @param[in]  aInstance  A pointer to an OpenThread instance.

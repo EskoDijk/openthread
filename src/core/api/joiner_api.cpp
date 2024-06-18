@@ -43,6 +43,19 @@
 
 using namespace ot;
 
+void otJoinerSetCcmIdentity(otInstance    *aInstance,
+                            const uint8_t *aX509Cert,
+                            uint32_t       aX509Length,
+                            const uint8_t *aPrivateKey,
+                            uint32_t       aPrivateKeyLength,
+                            const uint8_t *aX509CaCertificateChain,
+                            uint32_t       aX509CaCertChainLength)
+{
+    AsCoreType(aInstance).Get<MeshCoP::Joiner>().SetCcmIdentity(aX509Cert, aX509Length, aPrivateKey,
+                                                               aPrivateKeyLength, aX509CaCertificateChain,
+                                                               aX509CaCertChainLength);
+}
+
 otError otJoinerStart(otInstance      *aInstance,
                       const char      *aPskd,
                       const char      *aProvisioningUrl,

@@ -48,43 +48,25 @@
 #include "lib/platform/exit_code.h"
 #include "lib/spinel/logger.hpp"
 #include "lib/spinel/spinel_decoder.hpp"
+#include "lib/spinel/spinel_driver.hpp"
 
 namespace ot {
 namespace Spinel {
 
-char RadioSpinel::sVersion[kVersionStringSize] = "";
-
 otExtAddress RadioSpinel::sIeeeEui64;
-
-bool RadioSpinel::sIsReady = false; ///< NCP ready.
 
 bool RadioSpinel::sSupportsLogStream =
     false; ///< RCP supports `LOG_STREAM` property with OpenThread log meta-data format.
 
 bool RadioSpinel::sSupportsResetToBootloader = false; ///< RCP supports resetting into bootloader mode.
 
+bool RadioSpinel::sSupportsLogCrashDump = false; ///< RCP supports logging a crash dump.
+
 otRadioCaps RadioSpinel::sRadioCaps = OT_RADIO_CAPS_NONE;
-
-inline bool RadioSpinel::IsFrameForUs(spinel_iid_t aIid)
-{
-    bool found = false;
-
-    for (spinel_iid_t iid : mIidList)
-    {
-        if (aIid == iid)
-        {
-            ExitNow(found = true);
-        }
-    }
-
-exit:
-    return found;
-}
 
 RadioSpinel::RadioSpinel(void)
     : Logger("RadioSpinel")
     , mInstance(nullptr)
-    , mSpinelInterface(nullptr)
     , mCmdTidsInUse(0)
     , mCmdNextTid(1)
     , mTxRadioTid(0)
@@ -93,7 +75,6 @@ RadioSpinel::RadioSpinel(void)
     , mPropertyFormat(nullptr)
     , mExpectedCommand(0)
     , mError(OT_ERROR_NONE)
-    , mIid(SPINEL_HEADER_INVALID_IID)
     , mTransmitFrame(nullptr)
     , mShortAddress(0)
     , mPanId(0xffff)
@@ -108,6 +89,7 @@ RadioSpinel::RadioSpinel(void)
     , mRcpFailure(kRcpFailureNone)
     , mSrcMatchShortEntryCount(0)
     , mSrcMatchExtEntryCount(0)
+    , mSrcMatchEnabled(false)
     , mMacKeySet(false)
     , mCcaEnergyDetectThresholdSet(false)
     , mTransmitPowerSet(false)
@@ -115,6 +97,7 @@ RadioSpinel::RadioSpinel(void)
     , mFemLnaGainSet(false)
     , mEnergyScanning(false)
     , mMacFrameCounterSet(false)
+    , mSrcMatchSet(false)
 #endif
 #if OPENTHREAD_CONFIG_DIAG_ENABLE
     , mDiagMode(false)
@@ -128,41 +111,40 @@ RadioSpinel::RadioSpinel(void)
     , mVendorRestorePropertiesCallback(nullptr)
     , mVendorRestorePropertiesContext(nullptr)
 #endif
+    , mSpinelDriver(nullptr)
 {
-    memset(mIidList, SPINEL_HEADER_INVALID_IID, sizeof(mIidList));
     memset(&mRadioSpinelMetrics, 0, sizeof(mRadioSpinelMetrics));
     memset(&mCallbacks, 0, sizeof(mCallbacks));
 }
 
-void RadioSpinel::Init(SpinelInterface    &aSpinelInterface,
-                       bool                aResetRadio,
-                       bool                aSkipRcpCompatibilityCheck,
-                       const spinel_iid_t *aIidList,
-                       uint8_t             aIidListLength)
+void RadioSpinel::Init(bool aSkipRcpCompatibilityCheck, bool aSoftwareReset, SpinelDriver *aSpinelDriver)
 {
     otError error = OT_ERROR_NONE;
     bool    supportsRcpApiVersion;
     bool    supportsRcpMinHostApiVersion;
 
+    OT_UNUSED_VARIABLE(aSoftwareReset);
+
 #if OPENTHREAD_SPINEL_CONFIG_RCP_RESTORATION_MAX_COUNT > 0
-    mResetRadioOnStartup = aResetRadio;
+    mResetRadioOnStartup = aSoftwareReset;
 #endif
 
-    mSpinelInterface = &aSpinelInterface;
-    SuccessOrDie(mSpinelInterface->Init(HandleReceivedFrame, this, mRxFrameBuffer));
+    mSpinelDriver = aSpinelDriver;
+    mSpinelDriver->SetFrameHandler(&HandleReceivedFrame, &HandleSavedFrame, this);
 
-    VerifyOrDie(aIidList != nullptr, OT_EXIT_INVALID_ARGUMENTS);
-    VerifyOrDie(aIidListLength != 0 && aIidListLength <= OT_ARRAY_LENGTH(mIidList), OT_EXIT_INVALID_ARGUMENTS);
-    mIid = aIidList[0];
-    memset(mIidList, SPINEL_HEADER_INVALID_IID, sizeof(mIidList));
-    memcpy(mIidList, aIidList, aIidListLength * sizeof(spinel_iid_t));
+#if OPENTHREAD_CONFIG_MAC_HEADER_IE_SUPPORT && OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
+    memset(&mTxIeInfo, 0, sizeof(otRadioIeInfo));
+    mTxRadioFrame.mInfo.mTxInfo.mIeInfo = &mTxIeInfo;
+#endif
 
-    ResetRcp(aResetRadio);
-    SuccessOrExit(error = CheckSpinelVersion());
-    SuccessOrExit(error = Get(SPINEL_PROP_NCP_VERSION, SPINEL_DATATYPE_UTF8_S, sVersion, sizeof(sVersion)));
     SuccessOrExit(error = Get(SPINEL_PROP_HWADDR, SPINEL_DATATYPE_EUI64_S, sIeeeEui64.m8));
+    InitializeCaps(supportsRcpApiVersion, supportsRcpMinHostApiVersion);
 
-    VerifyOrDie(IsRcp(supportsRcpApiVersion, supportsRcpMinHostApiVersion), OT_EXIT_RADIO_SPINEL_INCOMPATIBLE);
+    if (sSupportsLogCrashDump)
+    {
+        LogDebg("RCP supports crash dump logging. Requesting crash dump.");
+        SuccessOrExit(error = Set(SPINEL_PROP_RCP_LOG_CRASH_DUMP, nullptr));
+    }
 
     if (!aSkipRcpCompatibilityCheck)
     {
@@ -192,50 +174,6 @@ void RadioSpinel::SetCallbacks(const struct RadioSpinelCallbacks &aCallbacks)
     mCallbacks = aCallbacks;
 }
 
-void RadioSpinel::ResetRcp(bool aResetRadio)
-{
-    bool hardwareReset;
-    bool resetDone = false;
-
-    // Avoid resetting the device twice in a row in Multipan RCP architecture
-    VerifyOrExit(!sIsReady, resetDone = true);
-
-    mWaitingKey = SPINEL_PROP_LAST_STATUS;
-
-    if (aResetRadio && (SendReset(SPINEL_RESET_STACK) == OT_ERROR_NONE) && (!sIsReady) &&
-        (WaitResponse(false) == OT_ERROR_NONE))
-    {
-        VerifyOrExit(sIsReady, resetDone = false);
-        LogInfo("Software reset RCP successfully");
-        ExitNow(resetDone = true);
-    }
-
-    hardwareReset = (mSpinelInterface->HardwareReset() == OT_ERROR_NONE);
-
-    if (hardwareReset)
-    {
-        SuccessOrExit(WaitResponse(false));
-    }
-
-    resetDone = true;
-
-    if (hardwareReset)
-    {
-        LogInfo("Hardware reset RCP successfully");
-    }
-    else
-    {
-        LogInfo("RCP self reset successfully");
-    }
-
-exit:
-    if (!resetDone)
-    {
-        LogCrit("Failed to reset RCP!");
-        DieNow(OT_EXIT_FAILURE);
-    }
-}
-
 otError RadioSpinel::CheckSpinelVersion(void)
 {
     otError      error = OT_ERROR_NONE;
@@ -258,68 +196,25 @@ exit:
     return error;
 }
 
-bool RadioSpinel::IsRcp(bool &aSupportsRcpApiVersion, bool &aSupportsRcpMinHostApiVersion)
+void RadioSpinel::InitializeCaps(bool &aSupportsRcpApiVersion, bool &aSupportsRcpMinHostApiVersion)
 {
-    uint8_t        capsBuffer[kCapsBufferSize];
-    const uint8_t *capsData         = capsBuffer;
-    spinel_size_t  capsLength       = sizeof(capsBuffer);
-    bool           supportsRawRadio = false;
-    bool           isRcp            = false;
-
-    aSupportsRcpApiVersion        = false;
-    aSupportsRcpMinHostApiVersion = false;
-
-    SuccessOrDie(Get(SPINEL_PROP_CAPS, SPINEL_DATATYPE_DATA_S, capsBuffer, &capsLength));
-
-    while (capsLength > 0)
+    if (!GetSpinelDriver().CoprocessorHasCap(SPINEL_CAP_CONFIG_RADIO))
     {
-        unsigned int   capability;
-        spinel_ssize_t unpacked;
-
-        unpacked = spinel_datatype_unpack(capsData, capsLength, SPINEL_DATATYPE_UINT_PACKED_S, &capability);
-        VerifyOrDie(unpacked > 0, OT_EXIT_RADIO_SPINEL_INCOMPATIBLE);
-
-        if (capability == SPINEL_CAP_MAC_RAW)
-        {
-            supportsRawRadio = true;
-        }
-
-        if (capability == SPINEL_CAP_CONFIG_RADIO)
-        {
-            isRcp = true;
-        }
-
-        if (capability == SPINEL_CAP_OPENTHREAD_LOG_METADATA)
-        {
-            sSupportsLogStream = true;
-        }
-
-        if (capability == SPINEL_CAP_RCP_API_VERSION)
-        {
-            aSupportsRcpApiVersion = true;
-        }
-
-        if (capability == SPINEL_CAP_RCP_RESET_TO_BOOTLOADER)
-        {
-            sSupportsResetToBootloader = true;
-        }
-
-        if (capability == SPINEL_PROP_RCP_MIN_HOST_API_VERSION)
-        {
-            aSupportsRcpMinHostApiVersion = true;
-        }
-
-        capsData += unpacked;
-        capsLength -= static_cast<spinel_size_t>(unpacked);
+        LogCrit("The co-processor isn't a RCP!");
+        DieNow(OT_EXIT_RADIO_SPINEL_INCOMPATIBLE);
     }
 
-    if (!supportsRawRadio && isRcp)
+    if (!GetSpinelDriver().CoprocessorHasCap(SPINEL_CAP_MAC_RAW))
     {
         LogCrit("RCP capability list does not include support for radio/raw mode");
         DieNow(OT_EXIT_RADIO_SPINEL_INCOMPATIBLE);
     }
 
-    return isRcp;
+    sSupportsLogStream            = GetSpinelDriver().CoprocessorHasCap(SPINEL_CAP_OPENTHREAD_LOG_METADATA);
+    aSupportsRcpApiVersion        = GetSpinelDriver().CoprocessorHasCap(SPINEL_CAP_RCP_API_VERSION);
+    sSupportsResetToBootloader    = GetSpinelDriver().CoprocessorHasCap(SPINEL_CAP_RCP_RESET_TO_BOOTLOADER);
+    aSupportsRcpMinHostApiVersion = GetSpinelDriver().CoprocessorHasCap(SPINEL_PROP_RCP_MIN_HOST_API_VERSION);
+    sSupportsLogCrashDump         = GetSpinelDriver().CoprocessorHasCap(SPINEL_CAP_RCP_LOG_CRASH_DUMP);
 }
 
 otError RadioSpinel::CheckRadioCapabilities(void)
@@ -409,60 +304,11 @@ exit:
 
 void RadioSpinel::Deinit(void)
 {
-    if (mSpinelInterface != nullptr)
-    {
-        mSpinelInterface->Deinit();
-        mSpinelInterface = nullptr;
-    }
-
     // This allows implementing pseudo reset.
-    sIsReady = false;
     new (this) RadioSpinel();
 }
 
-void RadioSpinel::HandleReceivedFrame(void *aContext) { static_cast<RadioSpinel *>(aContext)->HandleReceivedFrame(); }
-
-void RadioSpinel::HandleReceivedFrame(void)
-{
-    otError        error = OT_ERROR_NONE;
-    uint8_t        header;
-    spinel_ssize_t unpacked;
-
-    LogSpinelFrame(mRxFrameBuffer.GetFrame(), mRxFrameBuffer.GetLength(), false);
-    unpacked = spinel_datatype_unpack(mRxFrameBuffer.GetFrame(), mRxFrameBuffer.GetLength(), "C", &header);
-
-    // Accept spinel messages with the correct IID or broadcast IID.
-    spinel_iid_t iid = SPINEL_HEADER_GET_IID(header);
-
-    if (!IsFrameForUs(iid))
-    {
-        mRxFrameBuffer.DiscardFrame();
-        ExitNow();
-    }
-
-    VerifyOrExit(unpacked > 0 && (header & SPINEL_HEADER_FLAG) == SPINEL_HEADER_FLAG, error = OT_ERROR_PARSE);
-
-    if (SPINEL_HEADER_GET_TID(header) == 0)
-    {
-        HandleNotification(mRxFrameBuffer);
-    }
-    else
-    {
-        HandleResponse(mRxFrameBuffer.GetFrame(), mRxFrameBuffer.GetLength());
-        mRxFrameBuffer.DiscardFrame();
-    }
-
-exit:
-    if (error != OT_ERROR_NONE)
-    {
-        mRxFrameBuffer.DiscardFrame();
-        LogWarn("Error handling hdlc frame: %s", otThreadErrorToString(error));
-    }
-
-    UpdateParseErrorCount(error);
-}
-
-void RadioSpinel::HandleNotification(SpinelInterface::RxFrameBuffer &aFrameBuffer)
+void RadioSpinel::HandleNotification(const uint8_t *aFrame, uint16_t aLength, bool &aShouldSaveFrame)
 {
     spinel_prop_key_t key;
     spinel_size_t     len = 0;
@@ -470,11 +316,12 @@ void RadioSpinel::HandleNotification(SpinelInterface::RxFrameBuffer &aFrameBuffe
     uint8_t          *data = nullptr;
     uint32_t          cmd;
     uint8_t           header;
-    otError           error           = OT_ERROR_NONE;
-    bool              shouldSaveFrame = false;
+    otError           error = OT_ERROR_NONE;
 
-    unpacked = spinel_datatype_unpack(aFrameBuffer.GetFrame(), aFrameBuffer.GetLength(), "CiiD", &header, &cmd, &key,
-                                      &data, &len);
+    aShouldSaveFrame = false;
+
+    unpacked = spinel_datatype_unpack(aFrame, aLength, "CiiD", &header, &cmd, &key, &data, &len);
+
     VerifyOrExit(unpacked > 0, error = OT_ERROR_PARSE);
     VerifyOrExit(SPINEL_HEADER_GET_TID(header) == 0, error = OT_ERROR_PARSE);
 
@@ -487,7 +334,7 @@ void RadioSpinel::HandleNotification(SpinelInterface::RxFrameBuffer &aFrameBuffe
 
         if (!IsSafeToHandleNow(key))
         {
-            ExitNow(shouldSaveFrame = true);
+            ExitNow(aShouldSaveFrame = true);
         }
 
         HandleValueIs(key, data, static_cast<uint16_t>(len));
@@ -503,15 +350,6 @@ void RadioSpinel::HandleNotification(SpinelInterface::RxFrameBuffer &aFrameBuffe
     }
 
 exit:
-    if (!shouldSaveFrame || aFrameBuffer.SaveFrame() != OT_ERROR_NONE)
-    {
-        aFrameBuffer.DiscardFrame();
-
-        if (shouldSaveFrame)
-        {
-            LogCrit("RX Spinel buffer full, dropped incoming frame");
-        }
-    }
 
     UpdateParseErrorCount(error);
     LogIfFail("Error processing notification", error);
@@ -673,10 +511,10 @@ void RadioSpinel::HandleValueIs(spinel_prop_key_t aKey, const uint8_t *aBuffer, 
             }
 
             // this clear is necessary in case the RCP has sent messages between disable and reset
-            mRxFrameBuffer.Clear();
+            mSpinelDriver->ClearRxBuffer();
+            mSpinelDriver->SetCoprocessorReady();
 
             LogInfo("RCP reset: %s", spinel_status_to_cstr(status));
-            sIsReady = true;
         }
         else if (status == SPINEL_STATUS_SWITCHOVER_DONE || status == SPINEL_STATUS_SWITCHOVER_FAILED)
         {
@@ -777,6 +615,26 @@ void RadioSpinel::SetVendorRestorePropertiesCallback(otRadioSpinelVendorRestoreP
 }
 #endif
 
+SpinelDriver &RadioSpinel::GetSpinelDriver(void) const
+{
+    OT_ASSERT(mSpinelDriver != nullptr);
+    return *mSpinelDriver;
+}
+
+otError RadioSpinel::SendReset(uint8_t aResetType)
+{
+    otError error;
+
+    if ((aResetType == SPINEL_RESET_BOOTLOADER) && !sSupportsResetToBootloader)
+    {
+        ExitNow(error = OT_ERROR_NOT_CAPABLE);
+    }
+    error = GetSpinelDriver().SendReset(aResetType);
+
+exit:
+    return error;
+}
+
 otError RadioSpinel::ParseRadioFrame(otRadioFrame   &aFrame,
                                      const uint8_t  *aBuffer,
                                      uint16_t        aLength,
@@ -857,19 +715,6 @@ exit:
     return error;
 }
 
-void RadioSpinel::ProcessFrameQueue(void)
-{
-    uint8_t *frame = nullptr;
-    uint16_t length;
-
-    while (mRxFrameBuffer.GetNextSavedFrame(frame, length) == OT_ERROR_NONE)
-    {
-        HandleNotification(frame, length);
-    }
-
-    mRxFrameBuffer.ClearSavedFrames();
-}
-
 void RadioSpinel::RadioReceive(void)
 {
     if (!mIsPromiscuous)
@@ -934,20 +779,7 @@ void RadioSpinel::ProcessRadioStateMachine(void)
 
 void RadioSpinel::Process(const void *aContext)
 {
-    if (mRxFrameBuffer.HasSavedFrame())
-    {
-        ProcessFrameQueue();
-        RecoverFromRcpFailure();
-    }
-
-    mSpinelInterface->Process(aContext);
-    RecoverFromRcpFailure();
-
-    if (mRxFrameBuffer.HasSavedFrame())
-    {
-        ProcessFrameQueue();
-        RecoverFromRcpFailure();
-    }
+    OT_UNUSED_VARIABLE(aContext);
 
     ProcessRadioStateMachine();
     RecoverFromRcpFailure();
@@ -1114,7 +946,17 @@ exit:
 
 otError RadioSpinel::EnableSrcMatch(bool aEnable)
 {
-    return Set(SPINEL_PROP_MAC_SRC_MATCH_ENABLED, SPINEL_DATATYPE_BOOL_S, aEnable);
+    otError error;
+
+    SuccessOrExit(error = Set(SPINEL_PROP_MAC_SRC_MATCH_ENABLED, SPINEL_DATATYPE_BOOL_S, aEnable));
+
+#if OPENTHREAD_SPINEL_CONFIG_RCP_RESTORATION_MAX_COUNT > 0
+    mSrcMatchSet     = true;
+    mSrcMatchEnabled = aEnable;
+#endif
+
+exit:
+    return error;
 }
 
 otError RadioSpinel::AddSrcMatchShortEntry(uint16_t aShortAddress)
@@ -1532,7 +1374,7 @@ otError RadioSpinel::WaitResponse(bool aHandleRcpTimeout)
         uint64_t now;
 
         now = otPlatTimeGet();
-        if ((end <= now) || (mSpinelInterface->WaitForFrame(end - now) != OT_ERROR_NONE))
+        if ((end <= now) || (GetSpinelDriver().GetSpinelInterface()->WaitForFrame(end - now) != OT_ERROR_NONE))
         {
             LogWarn("Wait for response timeout");
             if (aHandleRcpTimeout)
@@ -1541,7 +1383,7 @@ otError RadioSpinel::WaitResponse(bool aHandleRcpTimeout)
             }
             ExitNow(mError = OT_ERROR_RESPONSE_TIMEOUT);
         }
-    } while (mWaitingTid || !sIsReady);
+    } while (mWaitingTid);
 
     LogIfFail("Error waiting response", mError);
     // This indicates end of waiting response.
@@ -1575,65 +1417,6 @@ exit:
     return tid;
 }
 
-otError RadioSpinel::SendReset(uint8_t aResetType)
-{
-    otError        error = OT_ERROR_NONE;
-    uint8_t        buffer[kMaxSpinelFrame];
-    spinel_ssize_t packed;
-
-    if ((aResetType == SPINEL_RESET_BOOTLOADER) && !sSupportsResetToBootloader)
-    {
-        ExitNow(error = OT_ERROR_NOT_CAPABLE);
-    }
-
-    // Pack the header, command and key
-    packed = spinel_datatype_pack(buffer, sizeof(buffer), SPINEL_DATATYPE_COMMAND_S SPINEL_DATATYPE_UINT8_S,
-                                  SPINEL_HEADER_FLAG | SPINEL_HEADER_IID(mIid), SPINEL_CMD_RESET, aResetType);
-
-    VerifyOrExit(packed > 0 && static_cast<size_t>(packed) <= sizeof(buffer), error = OT_ERROR_NO_BUFS);
-
-    SuccessOrExit(error = mSpinelInterface->SendFrame(buffer, static_cast<uint16_t>(packed)));
-    LogSpinelFrame(buffer, static_cast<uint16_t>(packed), true);
-
-exit:
-    return error;
-}
-
-otError RadioSpinel::SendCommand(uint32_t          aCommand,
-                                 spinel_prop_key_t aKey,
-                                 spinel_tid_t      tid,
-                                 const char       *aFormat,
-                                 va_list           args)
-{
-    otError        error = OT_ERROR_NONE;
-    uint8_t        buffer[kMaxSpinelFrame];
-    spinel_ssize_t packed;
-    uint16_t       offset;
-
-    // Pack the header, command and key
-    packed = spinel_datatype_pack(buffer, sizeof(buffer), "Cii", SPINEL_HEADER_FLAG | SPINEL_HEADER_IID(mIid) | tid,
-                                  aCommand, aKey);
-
-    VerifyOrExit(packed > 0 && static_cast<size_t>(packed) <= sizeof(buffer), error = OT_ERROR_NO_BUFS);
-
-    offset = static_cast<uint16_t>(packed);
-
-    // Pack the data (if any)
-    if (aFormat)
-    {
-        packed = spinel_datatype_vpack(buffer + offset, sizeof(buffer) - offset, aFormat, args);
-        VerifyOrExit(packed > 0 && static_cast<size_t>(packed + offset) <= sizeof(buffer), error = OT_ERROR_NO_BUFS);
-
-        offset += static_cast<uint16_t>(packed);
-    }
-
-    SuccessOrExit(error = mSpinelInterface->SendFrame(buffer, offset));
-    LogSpinelFrame(buffer, offset, true);
-
-exit:
-    return error;
-}
-
 otError RadioSpinel::RequestV(uint32_t command, spinel_prop_key_t aKey, const char *aFormat, va_list aArgs)
 {
     otError      error = OT_ERROR_NONE;
@@ -1641,7 +1424,7 @@ otError RadioSpinel::RequestV(uint32_t command, spinel_prop_key_t aKey, const ch
 
     VerifyOrExit(tid > 0, error = OT_ERROR_BUSY);
 
-    error = SendCommand(command, aKey, tid, aFormat, aArgs);
+    error = GetSpinelDriver().SendCommand(command, aKey, tid, aFormat, aArgs);
     SuccessOrExit(error);
 
     if (aKey == SPINEL_PROP_STREAM_RAW)
@@ -1804,6 +1587,43 @@ otError RadioSpinel::Transmit(otRadioFrame &aFrame)
     VerifyOrExit(mState == kStateReceive || (mState == kStateSleep && (sRadioCaps & OT_RADIO_CAPS_SLEEP_TO_TX)));
 
     mTransmitFrame = &aFrame;
+
+#if OPENTHREAD_CONFIG_MAC_HEADER_IE_SUPPORT && OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
+    if (mTransmitFrame->mInfo.mTxInfo.mIeInfo->mTimeIeOffset != 0)
+    {
+        uint64_t netRadioTime = otPlatRadioGetNow(mInstance);
+        uint64_t netSyncTime;
+        uint8_t *timeIe = mTransmitFrame->mPsdu + mTransmitFrame->mInfo.mTxInfo.mIeInfo->mTimeIeOffset;
+
+        if (netRadioTime == UINT64_MAX)
+        {
+            // If we can't get the radio time, get the platform time
+            netSyncTime = static_cast<uint64_t>(static_cast<int64_t>(otPlatTimeGet()) +
+                                                mTransmitFrame->mInfo.mTxInfo.mIeInfo->mNetworkTimeOffset);
+        }
+        else
+        {
+            uint32_t transmitDelay = 0;
+
+            // If supported, add a delay and transmit the network time at a precise moment
+#if !OPENTHREAD_MTD && OPENTHREAD_CONFIG_MAC_CSL_TRANSMITTER_ENABLE
+            transmitDelay                                  = kTxWaitUs / 10;
+            mTransmitFrame->mInfo.mTxInfo.mTxDelayBaseTime = static_cast<uint32_t>(netRadioTime);
+            mTransmitFrame->mInfo.mTxInfo.mTxDelay         = transmitDelay;
+#endif
+            netSyncTime = static_cast<uint64_t>(static_cast<int64_t>(netRadioTime) + transmitDelay +
+                                                mTransmitFrame->mInfo.mTxInfo.mIeInfo->mNetworkTimeOffset);
+        }
+
+        *(timeIe++) = mTransmitFrame->mInfo.mTxInfo.mIeInfo->mTimeSyncSeq;
+
+        for (uint8_t i = 0; i < sizeof(uint64_t); i++)
+        {
+            *(timeIe++) = static_cast<uint8_t>(netSyncTime & 0xff);
+            netSyncTime = netSyncTime >> 8;
+        }
+    }
+#endif // OPENTHREAD_CONFIG_MAC_HEADER_IE_SUPPORT && OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
 
     // `otPlatRadioTxStarted()` is triggered immediately for now, which may be earlier than real started time.
     mCallbacks.mTxStarted(mInstance, mTransmitFrame);
@@ -2058,7 +1878,7 @@ exit:
 
 uint64_t RadioSpinel::GetNow(void) { return (mIsTimeSynced) ? (otPlatTimeGet() + mRadioTimeOffset) : UINT64_MAX; }
 
-uint32_t RadioSpinel::GetBusSpeed(void) const { return mSpinelInterface->GetBusSpeed(); }
+uint32_t RadioSpinel::GetBusSpeed(void) const { return GetSpinelDriver().GetSpinelInterface()->GetBusSpeed(); }
 
 void RadioSpinel::HandleRcpUnexpectedReset(spinel_status_t aStatus)
 {
@@ -2083,13 +1903,10 @@ void RadioSpinel::HandleRcpTimeout(void)
 #if OPENTHREAD_SPINEL_CONFIG_RCP_RESTORATION_MAX_COUNT > 0
     mRcpFailure = kRcpFailureTimeout;
 #else
-    if (!sIsReady)
-    {
-        LogCrit("Failed to communicate with RCP - no response from RCP during initialization");
-        LogCrit("This is not a bug and typically due a config error (wrong URL parameters) or bad RCP image:");
-        LogCrit("- Make sure RCP is running the correct firmware");
-        LogCrit("- Double check the config parameters passed as `RadioURL` input");
-    }
+    LogCrit("Failed to communicate with RCP - no response from RCP during initialization");
+    LogCrit("This is not a bug and typically due a config error (wrong URL parameters) or bad RCP image:");
+    LogCrit("- Make sure RCP is running the correct firmware");
+    LogCrit("- Double check the config parameters passed as `RadioURL` input");
 
     DieNow(OT_EXIT_RADIO_SPINEL_NO_RESPONSE);
 #endif
@@ -2126,22 +1943,23 @@ void RadioSpinel::RecoverFromRcpFailure(void)
     LogWarn("Trying to recover (%d/%d)", mRcpFailureCount, kMaxFailureCount);
 
     mState = kStateDisabled;
-    mRxFrameBuffer.Clear();
+
+    GetSpinelDriver().ClearRxBuffer();
+    if (skipReset)
+    {
+        GetSpinelDriver().SetCoprocessorReady();
+    }
+    else
+    {
+        GetSpinelDriver().ResetCoprocessor(mResetRadioOnStartup);
+    }
+
     mCmdTidsInUse = 0;
     mCmdNextTid   = 1;
     mTxRadioTid   = 0;
     mWaitingTid   = 0;
     mError        = OT_ERROR_NONE;
     mIsTimeSynced = false;
-
-    if (skipReset)
-    {
-        sIsReady = true;
-    }
-    else
-    {
-        ResetRcp(mResetRadioOnStartup);
-    }
 
     SuccessOrDie(Set(SPINEL_PROP_PHY_ENABLED, SPINEL_DATATYPE_BOOL_S, true));
     mState = kStateSleep;
@@ -2183,12 +2001,44 @@ void RadioSpinel::RecoverFromRcpFailure(void)
     }
 
     --mRcpFailureCount;
+
+    SuccessOrDie(Set(SPINEL_PROP_RCP_LOG_CRASH_DUMP, nullptr));
+
     LogNote("RCP recovery is done");
 
 exit:
     return;
 #endif // OPENTHREAD_SPINEL_CONFIG_RCP_RESTORATION_MAX_COUNT > 0
 }
+
+void RadioSpinel::HandleReceivedFrame(const uint8_t *aFrame,
+                                      uint16_t       aLength,
+                                      uint8_t        aHeader,
+                                      bool          &aSave,
+                                      void          *aContext)
+{
+    static_cast<RadioSpinel *>(aContext)->HandleReceivedFrame(aFrame, aLength, aHeader, aSave);
+}
+
+void RadioSpinel::HandleReceivedFrame(const uint8_t *aFrame, uint16_t aLength, uint8_t aHeader, bool &aShouldSaveFrame)
+{
+    if (SPINEL_HEADER_GET_TID(aHeader) == 0)
+    {
+        HandleNotification(aFrame, aLength, aShouldSaveFrame);
+    }
+    else
+    {
+        HandleResponse(aFrame, aLength);
+        aShouldSaveFrame = false;
+    }
+}
+
+void RadioSpinel::HandleSavedFrame(const uint8_t *aFrame, uint16_t aLength, void *aContext)
+{
+    static_cast<RadioSpinel *>(aContext)->HandleSavedFrame(aFrame, aLength);
+}
+
+void RadioSpinel::HandleSavedFrame(const uint8_t *aFrame, uint16_t aLength) { HandleNotification(aFrame, aLength); }
 
 #if OPENTHREAD_SPINEL_CONFIG_RCP_RESTORATION_MAX_COUNT > 0
 void RadioSpinel::RestoreProperties(void)
@@ -2240,6 +2090,11 @@ void RadioSpinel::RestoreProperties(void)
     {
         SuccessOrDie(
             Insert(SPINEL_PROP_MAC_SRC_MATCH_EXTENDED_ADDRESSES, SPINEL_DATATYPE_EUI64_S, mSrcMatchExtEntries[i].m8));
+    }
+
+    if (mSrcMatchSet)
+    {
+        SuccessOrDie(Set(SPINEL_PROP_MAC_SRC_MATCH_ENABLED, SPINEL_DATATYPE_BOOL_S, mSrcMatchEnabled));
     }
 
     if (mCcaEnergyDetectThresholdSet)

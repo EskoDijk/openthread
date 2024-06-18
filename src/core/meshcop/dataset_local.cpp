@@ -82,7 +82,7 @@ Error DatasetLocal::Restore(Dataset &aDataset)
     SuccessOrExit(error);
 
     mSaved            = true;
-    mTimestampPresent = (aDataset.GetTimestamp(mType, mTimestamp) == kErrorNone);
+    mTimestampPresent = (aDataset.ReadTimestamp(mType, mTimestamp) == kErrorNone);
 
 exit:
     return error;
@@ -106,25 +106,10 @@ Error DatasetLocal::Read(Dataset &aDataset) const
     }
     else
     {
-        uint32_t elapsed;
-        uint32_t delayTimer;
-        Tlv     *tlv = aDataset.FindTlv(Tlv::kDelayTimer);
+        Tlv *tlv = aDataset.FindTlv(Tlv::kDelayTimer);
 
         VerifyOrExit(tlv != nullptr);
-
-        elapsed    = TimerMilli::GetNow() - mUpdateTime;
-        delayTimer = tlv->ReadValueAs<DelayTimerTlv>();
-
-        if (delayTimer > elapsed)
-        {
-            delayTimer -= elapsed;
-        }
-        else
-        {
-            delayTimer = 0;
-        }
-
-        tlv->WriteValueAs<DelayTimerTlv>(delayTimer);
+        tlv->WriteValueAs<DelayTimerTlv>(DelayTimerTlv::CalculateRemainingDelay(*tlv, mUpdateTime));
     }
 
     aDataset.mUpdateTime = TimerMilli::GetNow();
@@ -147,15 +132,15 @@ exit:
     return error;
 }
 
-Error DatasetLocal::Read(otOperationalDatasetTlvs &aDataset) const
+Error DatasetLocal::Read(Dataset::Tlvs &aDatasetTlvs) const
 {
     Dataset dataset;
     Error   error;
 
-    ClearAllBytes(aDataset);
+    ClearAllBytes(aDatasetTlvs);
 
     SuccessOrExit(error = Read(dataset));
-    dataset.ConvertTo(aDataset);
+    dataset.ConvertTo(aDatasetTlvs);
 
 exit:
     return error;
@@ -166,20 +151,23 @@ Error DatasetLocal::Save(const Dataset::Info &aDatasetInfo)
     Error   error;
     Dataset dataset;
 
-    SuccessOrExit(error = dataset.SetFrom(aDatasetInfo));
+    dataset.SetFrom(aDatasetInfo);
     SuccessOrExit(error = Save(dataset));
 
 exit:
     return error;
 }
 
-Error DatasetLocal::Save(const otOperationalDatasetTlvs &aDataset)
+Error DatasetLocal::Save(const Dataset::Tlvs &aDatasetTlvs)
 {
+    Error   error = kErrorNone;
     Dataset dataset;
 
-    dataset.SetFrom(aDataset);
+    SuccessOrExit(error = dataset.SetFrom(aDatasetTlvs));
+    error = Save(dataset);
 
-    return Save(dataset);
+exit:
+    return error;
 }
 
 Error DatasetLocal::Save(const Dataset &aDataset)
@@ -190,7 +178,7 @@ Error DatasetLocal::Save(const Dataset &aDataset)
     DestroySecurelyStoredKeys();
 #endif
 
-    if (aDataset.GetSize() == 0)
+    if (aDataset.GetLength() == 0)
     {
         // do not propagate error back
         IgnoreError(Get<Settings>().DeleteOperationalDataset(mType));
@@ -203,7 +191,7 @@ Error DatasetLocal::Save(const Dataset &aDataset)
         // Store the network key and PSKC in the secure storage instead of settings.
         Dataset dataset;
 
-        dataset.Set(GetType(), aDataset);
+        dataset.SetFrom(aDataset);
         MoveKeysToSecureStorage(dataset);
         SuccessOrExit(error = Get<Settings>().SaveOperationalDataset(mType, dataset));
 #else
@@ -214,7 +202,7 @@ Error DatasetLocal::Save(const Dataset &aDataset)
         LogInfo("%s dataset set", Dataset::TypeToString(mType));
     }
 
-    mTimestampPresent = (aDataset.GetTimestamp(mType, mTimestamp) == kErrorNone);
+    mTimestampPresent = (aDataset.ReadTimestamp(mType, mTimestamp) == kErrorNone);
     mUpdateTime       = TimerMilli::GetNow();
 
 exit:
@@ -273,7 +261,7 @@ void DatasetLocal::EmplaceSecurelyStoredKeys(Dataset &aDataset) const
     {
         Dataset dataset;
 
-        dataset.Set(GetType(), aDataset);
+        dataset.SetFrom(aDataset);
         MoveKeysToSecureStorage(dataset);
         SuccessOrAssert(Get<Settings>().SaveOperationalDataset(mType, dataset));
     }

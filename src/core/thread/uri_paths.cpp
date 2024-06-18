@@ -57,6 +57,8 @@ struct Entry
 
 // The list of URI paths (MUST be sorted alphabetically)
 static constexpr Entry kEntries[] = {
+    {".well-known/thread/c/rxr"},
+    {".well-known/thread/c/txr"},
     {"a/ae"},  // (0) kUriAddressError
     {"a/an"},  // (1) kUriAddressNotify
     {"a/aq"},  // (2) kUriAddressQuery
@@ -100,45 +102,47 @@ static constexpr Entry kEntries[] = {
 
 static_assert(BinarySearch::IsSorted(kEntries), "kEntries is not sorted");
 
-static_assert(0 == kUriAddressError, "kUriAddressError (`a/ae`) is invalid");
-static_assert(1 == kUriAddressNotify, "kUriAddressNotify (`a/an`) is invalid");
-static_assert(2 == kUriAddressQuery, "kUriAddressQuery (`a/aq`) is invalid");
-static_assert(3 == kUriAddressRelease, "kUriAddressRelease (`a/ar`) is invalid");
-static_assert(4 == kUriAddressSolicit, "kUriAddressSolicit (`a/as`) is invalid");
-static_assert(5 == kUriServerData, "kUriServerData (`a/sd`) is invalid");
-static_assert(6 == kUriAnycastLocate, "kUriAnycastLocate (`a/yl`) is invalid");
-static_assert(7 == kUriBackboneAnswer, "kUriBackboneAnswer (`b/ba`) is invalid");
-static_assert(8 == kUriBackboneMlr, "kUriBackboneMlr (`b/bmr`) is invalid");
-static_assert(9 == kUriBackboneQuery, "kUriBackboneQuery (`b/bq`) is invalid");
-static_assert(10 == kUriAnnounceBegin, "kUriAnnounceBegin (`c/ab`) is invalid");
-static_assert(11 == kUriActiveGet, "kUriActiveGet (`c/ag`) is invalid");
-static_assert(12 == kUriActiveSet, "kUriActiveSet (`c/as`) is invalid");
-static_assert(13 == kUriCommissionerKeepAlive, "kUriCommissionerKeepAlive (`c/ca`) is invalid");
-static_assert(14 == kUriCommissionerGet, "kUriCommissionerGet (`c/cg`) is invalid");
-static_assert(15 == kUriCommissionerPetition, "kUriCommissionerPetition (`c/cp`) is invalid");
-static_assert(16 == kUriCommissionerSet, "kUriCommissionerSet (`c/cs`) is invalid");
-static_assert(17 == kUriDatasetChanged, "kUriDatasetChanged (`c/dc`) is invalid");
-static_assert(18 == kUriEnergyReport, "kUriEnergyReport (`c/er`) is invalid");
-static_assert(19 == kUriEnergyScan, "kUriEnergyScan (`c/es`) is invalid");
-static_assert(20 == kUriJoinerEntrust, "kUriJoinerEntrust (`c/je`) is invalid");
-static_assert(21 == kUriJoinerFinalize, "kUriJoinerFinalize (`c/jf`) is invalid");
-static_assert(22 == kUriLeaderKeepAlive, "kUriLeaderKeepAlive (`c/la`) is invalid");
-static_assert(23 == kUriLeaderPetition, "kUriLeaderPetition (`c/lp`) is invalid");
-static_assert(24 == kUriPanIdConflict, "kUriPanIdConflict (`c/pc`) is invalid");
-static_assert(25 == kUriPendingGet, "kUriPendingGet (`c/pg`) is invalid");
-static_assert(26 == kUriPanIdQuery, "kUriPanIdQuery (`c/pq`) is invalid");
-static_assert(27 == kUriPendingSet, "kUriPendingSet (`c/ps`) is invalid");
-static_assert(28 == kUriRelayRx, "kUriRelayRx (`c/rx`) is invalid");
-static_assert(29 == kUriRelayTx, "kUriRelayTx (`c/tx`) is invalid");
-static_assert(30 == kUriProxyRx, "kUriProxyRx (`c/ur`) is invalid");
-static_assert(31 == kUriProxyTx, "kUriProxyTx (`c/ut`) is invalid");
-static_assert(32 == kUriDiagnosticGetAnswer, "kUriDiagnosticGetAnswer (`d/da`) is invalid");
-static_assert(33 == kUriDiagnosticGetRequest, "kUriDiagnosticGetRequest (`d/dg`) is invalid");
-static_assert(34 == kUriDiagnosticGetQuery, "kUriDiagnosticGetQuery (`d/dq`) is invalid");
-static_assert(35 == kUriDiagnosticReset, "kUriDiagnosticReset (`d/dr`) is invalid");
-static_assert(36 == kUriDuaRegistrationNotify, "kUriDuaRegistrationNotify (`n/dn`) is invalid");
-static_assert(37 == kUriDuaRegistrationRequest, "kUriDuaRegistrationRequest (`n/dr`) is invalid");
-static_assert(38 == kUriMlr, "kUriMlr (`n/mr`) is invalid");
+static_assert(0 == kUriWellknownThreadRelayRx, "kUriWellknownThreadRelayRx is invalid");
+static_assert(1 == kUriWellknownThreadRelayTx, "kUriWellknownThreadRelayTx is invalid");
+static_assert(2 == kUriAddressError, "kUriAddressError (`a/ae`) is invalid");
+static_assert(3 == kUriAddressNotify, "kUriAddressNotify (`a/an`) is invalid");
+static_assert(4 == kUriAddressQuery, "kUriAddressQuery (`a/aq`) is invalid");
+static_assert(5 == kUriAddressRelease, "kUriAddressRelease (`a/ar`) is invalid");
+static_assert(6 == kUriAddressSolicit, "kUriAddressSolicit (`a/as`) is invalid");
+static_assert(7 == kUriServerData, "kUriServerData (`a/sd`) is invalid");
+static_assert(8 == kUriAnycastLocate, "kUriAnycastLocate (`a/yl`) is invalid");
+static_assert(9 == kUriBackboneAnswer, "kUriBackboneAnswer (`b/ba`) is invalid");
+static_assert(10== kUriBackboneMlr, "kUriBackboneMlr (`b/bmr`) is invalid");
+static_assert(11== kUriBackboneQuery, "kUriBackboneQuery (`b/bq`) is invalid");
+static_assert(12 == kUriAnnounceBegin, "kUriAnnounceBegin (`c/ab`) is invalid");
+static_assert(13 == kUriActiveGet, "kUriActiveGet (`c/ag`) is invalid");
+static_assert(14 == kUriActiveSet, "kUriActiveSet (`c/as`) is invalid");
+static_assert(15 == kUriCommissionerKeepAlive, "kUriCommissionerKeepAlive (`c/ca`) is invalid");
+static_assert(16 == kUriCommissionerGet, "kUriCommissionerGet (`c/cg`) is invalid");
+static_assert(17 == kUriCommissionerPetition, "kUriCommissionerPetition (`c/cp`) is invalid");
+static_assert(18 == kUriCommissionerSet, "kUriCommissionerSet (`c/cs`) is invalid");
+static_assert(19 == kUriDatasetChanged, "kUriDatasetChanged (`c/dc`) is invalid");
+static_assert(20 == kUriEnergyReport, "kUriEnergyReport (`c/er`) is invalid");
+static_assert(21 == kUriEnergyScan, "kUriEnergyScan (`c/es`) is invalid");
+static_assert(22 == kUriJoinerEntrust, "kUriJoinerEntrust (`c/je`) is invalid");
+static_assert(23 == kUriJoinerFinalize, "kUriJoinerFinalize (`c/jf`) is invalid");
+static_assert(24 == kUriLeaderKeepAlive, "kUriLeaderKeepAlive (`c/la`) is invalid");
+static_assert(25 == kUriLeaderPetition, "kUriLeaderPetition (`c/lp`) is invalid");
+static_assert(26 == kUriPanIdConflict, "kUriPanIdConflict (`c/pc`) is invalid");
+static_assert(27 == kUriPendingGet, "kUriPendingGet (`c/pg`) is invalid");
+static_assert(28 == kUriPanIdQuery, "kUriPanIdQuery (`c/pq`) is invalid");
+static_assert(29 == kUriPendingSet, "kUriPendingSet (`c/ps`) is invalid");
+static_assert(30 == kUriRelayRx, "kUriRelayRx (`c/rx`) is invalid");
+static_assert(31 == kUriRelayTx, "kUriRelayTx (`c/tx`) is invalid");
+static_assert(32 == kUriProxyRx, "kUriProxyRx (`c/ur`) is invalid");
+static_assert(33 == kUriProxyTx, "kUriProxyTx (`c/ut`) is invalid");
+static_assert(34 == kUriDiagnosticGetAnswer, "kUriDiagnosticGetAnswer (`d/da`) is invalid");
+static_assert(35 == kUriDiagnosticGetRequest, "kUriDiagnosticGetRequest (`d/dg`) is invalid");
+static_assert(36 == kUriDiagnosticGetQuery, "kUriDiagnosticGetQuery (`d/dq`) is invalid");
+static_assert(37 == kUriDiagnosticReset, "kUriDiagnosticReset (`d/dr`) is invalid");
+static_assert(38 == kUriDuaRegistrationNotify, "kUriDuaRegistrationNotify (`n/dn`) is invalid");
+static_assert(39 == kUriDuaRegistrationRequest, "kUriDuaRegistrationRequest (`n/dr`) is invalid");
+static_assert(40 == kUriMlr, "kUriMlr (`n/mr`) is invalid");
 
 } // namespace UriList
 

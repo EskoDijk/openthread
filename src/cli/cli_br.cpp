@@ -233,7 +233,7 @@ template <> otError Br::Process<Cmd("omrprefix")>(Arg aArgs[])
 
         OutputFormat("%s", outputPrefixTypes == kPrefixTypeFavored ? "" : "Favored: ");
         OutputIp6Prefix(favored);
-        OutputLine(" prf:%s", Interpreter::PreferenceToString(preference));
+        OutputLine(" prf:%s", PreferenceToString(preference));
     }
 
 exit:
@@ -365,7 +365,7 @@ template <> otError Br::Process<Cmd("nat64prefix")>(Arg aArgs[])
 
         OutputFormat("%s", outputPrefixTypes == kPrefixTypeFavored ? "" : "Favored: ");
         OutputIp6Prefix(favored);
-        OutputLine(" prf:%s", Interpreter::PreferenceToString(preference));
+        OutputLine(" prf:%s", PreferenceToString(preference));
     }
 
 exit:
@@ -424,7 +424,7 @@ template <> otError Br::Process<Cmd("prefixtable")>(Arg aArgs[])
         }
         else
         {
-            OutputFormat("route-prf:%s, ", Interpreter::PreferenceToString(entry.mRoutePreference));
+            OutputFormat("route-prf:%s, ", PreferenceToString(entry.mRoutePreference));
         }
 
         OutputFormat("router:");
@@ -484,6 +484,25 @@ template <> otError Br::Process<Cmd("pd")>(Arg aArgs[])
                       "OT_BORDER_ROUTING_DHCP6_PD_STATE_RUNNING value is not expected!");
 
         OutputLine("%s", Stringify(otBorderRoutingDhcp6PdGetState(GetInstancePtr()), kDhcpv6PdStateStrings));
+    }
+    /**
+     * @cli br pd omrprefix
+     * @code
+     * br pd omrprefix
+     * 2001:db8:cafe:0:0/64 lifetime:1800 preferred:1800
+     * Done
+     * @endcode
+     * @par api_copy
+     * #otBorderRoutingGetPdOmrPrefix
+     */
+    else if (aArgs[0] == "omrprefix")
+    {
+        otBorderRoutingPrefixTableEntry entry;
+
+        SuccessOrExit(error = otBorderRoutingGetPdOmrPrefix(GetInstancePtr(), &entry));
+
+        OutputIp6Prefix(entry.mPrefix);
+        OutputLine(" lifetime:%lu preferred:%lu", ToUlong(entry.mValidLifetime), ToUlong(entry.mPreferredLifetime));
     }
     else
     {
@@ -594,8 +613,7 @@ template <> otError Br::Process<Cmd("rioprf")>(Arg aArgs[])
      */
     if (aArgs[0].IsEmpty())
     {
-        OutputLine("%s",
-                   Interpreter::PreferenceToString(otBorderRoutingGetRouteInfoOptionPreference(GetInstancePtr())));
+        OutputLine("%s", PreferenceToString(otBorderRoutingGetRouteInfoOptionPreference(GetInstancePtr())));
     }
     /**
      * @cli br rioprf clear
@@ -648,7 +666,7 @@ template <> otError Br::Process<Cmd("routeprf")>(Arg aArgs[])
      */
     if (aArgs[0].IsEmpty())
     {
-        OutputLine("%s", Interpreter::PreferenceToString(otBorderRoutingGetRoutePreference(GetInstancePtr())));
+        OutputLine("%s", PreferenceToString(otBorderRoutingGetRoutePreference(GetInstancePtr())));
     }
     /**
      * @cli br routeprf clear

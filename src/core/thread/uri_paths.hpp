@@ -46,6 +46,8 @@ namespace ot {
  */
 enum Uri : uint8_t
 {
+    kUriWellknownThreadRelayRx,
+    kUriWellknownThreadRelayTx,
     kUriAddressError,           ///< Address Error ("a/ae")
     kUriAddressNotify,          ///< Address Notify ("a/an")
     kUriAddressQuery,           ///< Address Query ("a/aq")

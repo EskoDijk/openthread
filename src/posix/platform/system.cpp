@@ -54,6 +54,7 @@
 #include "posix/platform/firewall.hpp"
 #include "posix/platform/infra_if.hpp"
 #include "posix/platform/mainloop.hpp"
+#include "posix/platform/mdns_socket.hpp"
 #include "posix/platform/radio_url.hpp"
 #include "posix/platform/udp.hpp"
 
@@ -128,11 +129,21 @@ void otSysSetInfraNetif(const char *aInfraNetifName, int aIcmp6Socket)
 
 void platformInit(otPlatformConfig *aPlatformConfig)
 {
+    CoprocessorType type;
+
 #if OPENTHREAD_POSIX_CONFIG_BACKTRACE_ENABLE
     platformBacktraceInit();
 #endif
 
     platformAlarmInit(aPlatformConfig->mSpeedUpFactor, aPlatformConfig->mRealTimeSignal);
+
+    type = platformSpinelManagerInit(get802154RadioUrl(aPlatformConfig));
+    if (type != OT_COPROCESSOR_RCP)
+    {
+        printf("Only RCP is supported!\n");
+        exit(OT_EXIT_FAILURE);
+    }
+
     platformRadioInit(get802154RadioUrl(aPlatformConfig));
 
     // For Dry-Run option, only init the radio.
@@ -145,7 +156,10 @@ void platformInit(otPlatformConfig *aPlatformConfig)
 
 #if OPENTHREAD_POSIX_CONFIG_INFRA_IF_ENABLE
     ot::Posix::InfraNetif::Get().Init();
+#endif
 
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENABLE
+    ot::Posix::MdnsSocket::Get().Init();
 #endif
 
     gNetifName[0] = '\0';
@@ -197,6 +211,10 @@ void platformSetUp(otPlatformConfig *aPlatformConfig)
     ot::Posix::Udp::Get().SetUp();
 #endif
 
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENABLE
+    ot::Posix::MdnsSocket::Get().SetUp();
+#endif
+
 #if OPENTHREAD_POSIX_CONFIG_DAEMON_ENABLE
     ot::Posix::Daemon::Get().SetUp();
 #endif
@@ -244,6 +262,10 @@ void platformTearDown(void)
     ot::Posix::InfraNetif::Get().TearDown();
 #endif
 
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENABLE
+    ot::Posix::MdnsSocket::Get().TearDown();
+#endif
+
 exit:
     return;
 }
@@ -254,6 +276,7 @@ void platformDeinit(void)
     virtualTimeDeinit();
 #endif
     platformRadioDeinit();
+    platformSpinelManagerDeinit();
 
     // For Dry-Run option, only the radio is initialized.
     VerifyOrExit(!gDryRun);
@@ -270,6 +293,10 @@ void platformDeinit(void)
 
 #if OPENTHREAD_POSIX_CONFIG_INFRA_IF_ENABLE
     ot::Posix::InfraNetif::Get().Deinit();
+#endif
+
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENABLE
+    ot::Posix::MdnsSocket::Get().Deinit();
 #endif
 
 exit:
@@ -327,6 +354,7 @@ void otSysMainloopUpdate(otInstance *aInstance, otSysMainloopContext *aMainloop)
 #if OPENTHREAD_POSIX_VIRTUAL_TIME
     virtualTimeUpdateFdSet(aMainloop);
 #else
+    platformSpinelManagerUpdateFdSet(aMainloop);
     platformRadioUpdateFdSet(aMainloop);
 #endif
 #if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
@@ -390,6 +418,7 @@ void otSysMainloopProcess(otInstance *aInstance, const otSysMainloopContext *aMa
 #if OPENTHREAD_POSIX_VIRTUAL_TIME
     virtualTimeProcess(aInstance, aMainloop);
 #else
+    platformSpinelManagerProcess(aInstance, aMainloop);
     platformRadioProcess(aInstance, aMainloop);
 #endif
 #if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE

@@ -94,7 +94,7 @@ Error TcatAgent::Start(const TcatAgent::VendorInfo &aVendorInfo,
     mAlreadyCommissioned        = false;
 
 exit:
-    LogError("start TCAT agent", error);
+    LogWarnOnError(error, "start TCAT agent");
     return error;
 }
 
@@ -224,14 +224,14 @@ bool TcatAgent::CheckCommandClassAuthorizationFlags(CommandClassFlags aCommissio
 
         if (datasetError == kErrorNone)
         {
-            if (datasetInfo.IsNetworkNamePresent() && mCommissionerHasNetworkName &&
-                (datasetInfo.GetNetworkName() == mCommissionerNetworkName))
+            if (datasetInfo.IsPresent<Dataset::kNetworkName>() && mCommissionerHasNetworkName &&
+                (datasetInfo.Get<Dataset::kNetworkName>() == mCommissionerNetworkName))
             {
                 networkNamesMatch = true;
             }
 
-            if (datasetInfo.IsExtendedPanIdPresent() && mCommissionerHasExtendedPanId &&
-                (datasetInfo.GetExtendedPanId() == mCommissionerExtendedPanId))
+            if (datasetInfo.IsPresent<Dataset::kExtendedPanId>() && mCommissionerHasExtendedPanId &&
+                (datasetInfo.Get<Dataset::kExtendedPanId>() == mCommissionerExtendedPanId))
             {
                 extendedPanIdsMatch = true;
             }
@@ -461,11 +461,12 @@ exit:
 
 Error TcatAgent::HandleSetActiveOperationalDataset(const Message &aIncommingMessage, uint16_t aOffset, uint16_t aLength)
 {
-    Dataset                  dataset;
-    otOperationalDatasetTlvs datasetTlvs;
-    Error                    error;
+    Dataset       dataset;
+    Dataset::Tlvs datasetTlvs;
+    Error         error;
 
-    SuccessOrExit(error = dataset.ReadFromMessage(aIncommingMessage, aOffset, aLength));
+    SuccessOrExit(error = dataset.SetFrom(aIncommingMessage, aOffset, aLength));
+    SuccessOrExit(error = dataset.ValidateTlvs());
 
     if (!CheckCommandClassAuthorizationFlags(mCommissionerAuthorizationField.mApplicationFlags,
                                              mDeviceAuthorizationField.mApplicationFlags, &dataset))
@@ -487,7 +488,7 @@ Error TcatAgent::HandleStartThreadInterface(void)
     Dataset::Info datasetInfo;
 
     VerifyOrExit(Get<ActiveDatasetManager>().Read(datasetInfo) == kErrorNone, error = kErrorInvalidState);
-    VerifyOrExit(datasetInfo.IsNetworkKeyPresent(), error = kErrorInvalidState);
+    VerifyOrExit(datasetInfo.IsPresent<Dataset::kNetworkKey>(), error = kErrorInvalidState);
 
 #if OPENTHREAD_CONFIG_LINK_RAW_ENABLE
     VerifyOrExit(!Get<Mac::LinkRaw>().IsEnabled(), error = kErrorInvalidState);
@@ -499,16 +500,6 @@ Error TcatAgent::HandleStartThreadInterface(void)
 exit:
     return error;
 }
-
-#if OT_SHOULD_LOG_AT(OT_LOG_LEVEL_WARN)
-void TcatAgent::LogError(const char *aActionText, Error aError)
-{
-    if (aError != kErrorNone)
-    {
-        LogWarn("Failed to %s: %s", aActionText, ErrorToString(aError));
-    }
-}
-#endif
 
 } // namespace MeshCoP
 } // namespace ot

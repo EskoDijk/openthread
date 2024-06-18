@@ -121,6 +121,17 @@ exit:
     return;
 }
 
+void Joiner::SetCcmIdentity(const uint8_t *aX509Cert,
+                            uint32_t       aX509Length,
+                            const uint8_t *aPrivateKey,
+                            uint32_t       aPrivateKeyLength,
+                            const uint8_t *aX509CaCertificateChain,
+                            uint32_t aX509CaCertChainLength)
+{
+    Get<Tmf::SecureAgent>().SetCertificate(aX509Cert, aX509Length, aPrivateKey, aPrivateKeyLength);
+    Get<Tmf::SecureAgent>().SetCaCertificateChain(aX509CaCertificateChain, aX509CaCertChainLength);
+}
+
 Error Joiner::Start(const char      *aPskd,
                     const char      *aProvisioningUrl,
                     const char      *aVendorName,
@@ -145,15 +156,24 @@ Error Joiner::Start(const char      *aPskd,
     VerifyOrExit(Get<ThreadNetif>().IsUp() && Get<Mle::Mle>().GetRole() == Mle::kRoleDisabled,
                  error = kErrorInvalidState);
 
-    SuccessOrExit(error = joinerPskd.SetFrom(aPskd));
+    if (aPskd != nullptr)
+    {
+        SuccessOrExit(error = joinerPskd.SetFrom(aPskd));
+        mJoinerSourcePort = kMeshcopJoinerUdpSourcePort;
+    }else{
+        mJoinerSourcePort = kCcmBrskiJoinerUdpSourcePort; // FIXME other types
+    }
 
     // Use random-generated extended address.
     randomAddress.GenerateRandom();
     Get<Mac::Mac>().SetExtAddress(randomAddress);
     Get<Mle::MleRouter>().UpdateLinkLocalAddress();
 
-    SuccessOrExit(error = Get<Tmf::SecureAgent>().Start(kJoinerUdpPort));
-    Get<Tmf::SecureAgent>().SetPsk(joinerPskd);
+    SuccessOrExit(error = Get<Tmf::SecureAgent>().Start(mJoinerSourcePort));
+    if (aPskd != nullptr)
+    {
+        Get<Tmf::SecureAgent>().SetPsk(joinerPskd);
+    }
 
     for (JoinerRouter &router : mJoinerRouters)
     {
@@ -185,7 +205,7 @@ exit:
         FreeJoinerFinalizeMessage();
     }
 
-    LogError("start joiner", error);
+    LogWarnOnError(error, "start joiner");
     return error;
 }
 
@@ -210,7 +230,7 @@ void Joiner::Finish(Error aError)
     case kStateEntrust:
     case kStateJoined:
         Get<Tmf::SecureAgent>().Disconnect();
-        IgnoreError(Get<Ip6::Filter>().RemoveUnsecurePort(kJoinerUdpPort));
+        IgnoreError(Get<Ip6::Filter>().RemoveUnsecurePort(mJoinerSourcePort));
         mTimer.Stop();
 
         OT_FALL_THROUGH;
@@ -369,7 +389,7 @@ Error Joiner::Connect(JoinerRouter &aRouter)
 
     Get<Mac::Mac>().SetPanId(aRouter.mPanId);
     SuccessOrExit(error = Get<Mac::Mac>().SetPanChannel(aRouter.mChannel));
-    SuccessOrExit(error = Get<Ip6::Filter>().AddUnsecurePort(kJoinerUdpPort));
+    SuccessOrExit(error = Get<Ip6::Filter>().AddUnsecurePort(mJoinerSourcePort));
 
     sockAddr.GetAddress().SetToLinkLocalAddress(aRouter.mExtAddr);
 
@@ -378,7 +398,7 @@ Error Joiner::Connect(JoinerRouter &aRouter)
     SetState(kStateConnect);
 
 exit:
-    LogError("start secure joiner connection", error);
+    LogWarnOnError(error, "start secure joiner connection");
     return error;
 }
 
@@ -513,7 +533,7 @@ void Joiner::HandleJoinerFinalizeResponse(Coap::Message *aMessage, const Ip6::Me
 
 exit:
     Get<Tmf::SecureAgent>().Disconnect();
-    IgnoreError(Get<Ip6::Filter>().RemoveUnsecurePort(kJoinerUdpPort));
+    IgnoreError(Get<Ip6::Filter>().RemoveUnsecurePort(mJoinerSourcePort));
 }
 
 template <> void Joiner::HandleTmf<kUriJoinerEntrust>(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
@@ -528,10 +548,10 @@ template <> void Joiner::HandleTmf<kUriJoinerEntrust>(Coap::Message &aMessage, c
 
     datasetInfo.Clear();
 
-    SuccessOrExit(error = Tlv::Find<NetworkKeyTlv>(aMessage, datasetInfo.UpdateNetworkKey()));
+    SuccessOrExit(error = Tlv::Find<NetworkKeyTlv>(aMessage, datasetInfo.Update<Dataset::kNetworkKey>()));
 
-    datasetInfo.SetChannel(Get<Mac::Mac>().GetPanChannel());
-    datasetInfo.SetPanId(Get<Mac::Mac>().GetPanId());
+    datasetInfo.Set<Dataset::kChannel>(Get<Mac::Mac>().GetPanChannel());
+    datasetInfo.Set<Dataset::kPanId>(Get<Mac::Mac>().GetPanId());
 
     IgnoreError(Get<ActiveDatasetManager>().Save(datasetInfo));
 
@@ -543,7 +563,7 @@ template <> void Joiner::HandleTmf<kUriJoinerEntrust>(Coap::Message &aMessage, c
     mTimer.Start(kConfigExtAddressDelay);
 
 exit:
-    LogError("process joiner entrust", error);
+    LogWarnOnError(error, "process joiner entrust");
 }
 
 void Joiner::SendJoinerEntrustResponse(const Coap::Message &aRequest, const Ip6::MessageInfo &aRequestInfo)

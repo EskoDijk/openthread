@@ -271,6 +271,7 @@ Error CoapBase::SendMessage(Message                &aMessage,
 
     if (aMessage.IsConfirmable())
     {
+        LogDebg("FIXME line 274");
         copyLength = aMessage.GetLength();
     }
     else if (aMessage.IsNonConfirmable() && (aHandler != nullptr))
@@ -317,6 +318,7 @@ Error CoapBase::SendMessage(Message                &aMessage,
         }
 #endif // OPENTHREAD_CONFIG_COAP_OBSERVE_API_ENABLE
 
+        LogDebg("FIXME line 321");
         metadata.mSourceAddress            = aMessageInfo.GetSockAddr();
         metadata.mDestinationPort          = aMessageInfo.GetPeerPort();
         metadata.mDestinationAddress       = aMessageInfo.GetPeerAddr();
@@ -343,15 +345,20 @@ Error CoapBase::SendMessage(Message                &aMessage,
             (metadata.mConfirmable ? metadata.mRetransmissionTimeout : aTxParameters.CalculateMaxTransmitWait());
 
         storedCopy = CopyAndEnqueueMessage(aMessage, copyLength, metadata);
+        LogDebg("FIXME storedCopy is != null: %u", storedCopy != nullptr);
         VerifyOrExit(storedCopy != nullptr, error = kErrorNoBufs);
+        LogDebg("FIXME storedCopy done");
     }
 
+    LogDebg("before send FIXME");
     SuccessOrExit(error = Send(aMessage, aMessageInfo));
+    LogDebg("before after send FIXME");
 
 exit:
 
     if (error != kErrorNone && storedCopy != nullptr)
     {
+        LogDebg("FIXME DequeueMessage");
         DequeueMessage(*storedCopy);
     }
 
@@ -565,8 +572,14 @@ Message *CoapBase::CopyAndEnqueueMessage(const Message &aMessage, uint16_t aCopy
 
     mRetransmissionTimer.FireAtIfEarlier(aMetadata.mNextTimerShot);
 
+    MessageQueue::Info info;
+    mPendingRequests.GetInfo(info);
+    LogDebg("mPendingRequests.size1 = %u", info.mNumMessages);
+
     mPendingRequests.Enqueue(*messageCopy);
 
+    mPendingRequests.GetInfo(info);
+    LogDebg("mPendingRequests.size2 = %u", info.mNumMessages);
 exit:
     FreeAndNullMessageOnError(messageCopy, error);
     return messageCopy;
@@ -1011,6 +1024,9 @@ Message *CoapBase::FindRelatedRequest(const Message          &aResponse,
     {
         aMetadata.ReadFrom(message);
 
+        LogDebg("mDestinationAddress / msg = %s / %s", aMetadata.mDestinationAddress.ToString().AsCString(), aMessageInfo.GetPeerAddr().ToString().AsCString());
+        LogDebg("mDestinationPort / msg = %u / %u", aMetadata.mDestinationPort, aMessageInfo.GetPeerPort());
+
         if (((aMetadata.mDestinationAddress == aMessageInfo.GetPeerAddr()) ||
              aMetadata.mDestinationAddress.IsMulticast() ||
              aMetadata.mDestinationAddress.GetIid().IsAnycastLocator()) &&
@@ -1064,10 +1080,12 @@ void CoapBase::Receive(ot::Message &aMessage, const Ip6::MessageInfo &aMessageIn
     }
     else
     {
+        LogDebg("FIXME Coap ProcessReceivedResponse calling");
         ProcessReceivedResponse(message, aMessageInfo);
     }
 
 #if OPENTHREAD_CONFIG_OTNS_ENABLE
+    LogDebg("Calling OTNS Emit coap receive");
     Get<Utils::Otns>().EmitCoapReceive(message, aMessageInfo);
 #endif
 }
@@ -1085,8 +1103,14 @@ void CoapBase::ProcessReceivedResponse(Message &aMessage, const Ip6::MessageInfo
     uint32_t totalTransferSize = 0;
 #endif
 
+    LogDebg("FindRelatedRequest starting pp=%u sp=%u sa=%s pa=%s", aMessageInfo.GetPeerPort(), aMessageInfo.GetSockPort(),
+            aMessageInfo.GetSockAddr().ToString().AsCString(), aMessageInfo.GetPeerAddr().ToString().AsCString());
     request = FindRelatedRequest(aMessage, aMessageInfo, metadata);
+    if (request == nullptr) {
+        LogDebg("FindRelatedRequest is null");
+    }
     VerifyOrExit(request != nullptr);
+    LogDebg("FindRelatedRequest MID = %u", request->GetMessageId());
 
 #if OPENTHREAD_CONFIG_COAP_OBSERVE_API_ENABLE
     if (metadata.mObserve && request->IsRequest())

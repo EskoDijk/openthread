@@ -172,6 +172,16 @@ public:
     Error ClearDiscerner(void);
 
     /**
+     * FIXME comments insert here from coap_secure.hpp
+     */
+    void SetCcmIdentity(const uint8_t *aX509Cert,
+                        uint32_t       aX509Length,
+                        const uint8_t *aPrivateKey,
+                        uint32_t       aPrivateKeyLength,
+                        const uint8_t *aX509CaCertificateChain,
+                        uint32_t aX509CaCertChainLength);
+
+    /**
      * Converts a given Joiner state to its human-readable string representation.
      *
      * @param[in] aState  The Joiner state to convert.
@@ -183,6 +193,8 @@ public:
 
 private:
     static constexpr uint16_t kJoinerUdpPort = OPENTHREAD_CONFIG_JOINER_UDP_PORT;
+    static constexpr uint16_t kMeshcopJoinerUdpSourcePort = OPENTHREAD_CONFIG_JOINER_UDP_PORT + 8;
+    static constexpr uint16_t kCcmBrskiJoinerUdpSourcePort = OPENTHREAD_CONFIG_JOINER_UDP_PORT + 1;
 
     static constexpr uint32_t kConfigExtAddressDelay = 100;  // in msec.
     static constexpr uint32_t kResponseTimeout       = 4000; ///< Max wait time to receive response (in msec).
@@ -239,6 +251,7 @@ private:
     JoinerDiscerner mDiscerner;
 
     State mState;
+    uint16_t mJoinerSourcePort;
 
     Callback<otJoinerCallback> mCallback;
 

@@ -157,7 +157,12 @@ Error MleRouter::SetRouterEligible(bool aEligible)
 {
     Error error = kErrorNone;
 
-    VerifyOrExit(IsFullThreadDevice() || !aEligible, error = kErrorNotCapable);
+    if (!IsFullThreadDevice())
+    {
+        VerifyOrExit(!aEligible, error = kErrorNotCapable);
+    }
+
+    VerifyOrExit(aEligible != mRouterEligible);
 
     mRouterEligible = aEligible;
 
@@ -168,6 +173,11 @@ Error MleRouter::SetRouterEligible(bool aEligible)
         break;
 
     case kRoleChild:
+        if (mRouterEligible)
+        {
+            mRouterRoleTransition.StartTimeout();
+        }
+
         Get<Mac::Mac>().SetBeaconEnabled(mRouterEligible);
         break;
 
@@ -3238,44 +3248,39 @@ exit:
 
 Error MleRouter::CheckReachability(uint16_t aMeshDest, const Ip6::Header &aIp6Header)
 {
-    Error error = kErrorNone;
+    bool isReachable = false;
 
     if (IsChild())
     {
-        error = Mle::CheckReachability(aMeshDest, aIp6Header);
+        if (aMeshDest == GetRloc16())
+        {
+            isReachable = Get<ThreadNetif>().HasUnicastAddress(aIp6Header.GetDestination());
+        }
+        else
+        {
+            isReachable = true;
+        }
+
         ExitNow();
     }
 
-    if (aMeshDest == Get<Mac::Mac>().GetShortAddress())
+    if (aMeshDest == GetRloc16())
     {
-        if (Get<ThreadNetif>().HasUnicastAddress(aIp6Header.GetDestination()))
-        {
-            // IPv6 destination is this device
-            ExitNow();
-        }
-        else if (mNeighborTable.FindNeighbor(aIp6Header.GetDestination()) != nullptr)
-        {
-            // IPv6 destination is an RFD child
-            ExitNow();
-        }
-    }
-    else if (RouterIdFromRloc16(aMeshDest) == mRouterId)
-    {
-        if (mChildTable.FindChild(aMeshDest, Child::kInStateValidOrRestoring))
-        {
-            // Mesh destination is a child of this device
-            ExitNow();
-        }
-    }
-    else if (GetNextHop(aMeshDest) != Mac::kShortAddrInvalid)
-    {
+        isReachable = Get<ThreadNetif>().HasUnicastAddress(aIp6Header.GetDestination()) ||
+                      (mNeighborTable.FindNeighbor(aIp6Header.GetDestination()) != nullptr);
         ExitNow();
     }
 
-    error = kErrorNoRoute;
+    if (RouterIdFromRloc16(aMeshDest) == mRouterId)
+    {
+        isReachable = (mChildTable.FindChild(aMeshDest, Child::kInStateValidOrRestoring) != nullptr);
+        ExitNow();
+    }
+
+    isReachable = (GetNextHop(aMeshDest) != Mac::kShortAddrInvalid);
 
 exit:
-    return error;
+    return isReachable ? kErrorNone : kErrorNoRoute;
 }
 
 Error MleRouter::SendAddressSolicit(ThreadStatusTlv::Status aStatus)
@@ -3896,20 +3901,6 @@ exit:
 }
 
 #if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
-void MleRouter::HandleTimeSync(RxInfo &aRxInfo)
-{
-    Log(kMessageReceive, kTypeTimeSync, aRxInfo.mMessageInfo.GetPeerAddr());
-
-    VerifyOrExit(aRxInfo.IsNeighborStateValid());
-
-    aRxInfo.mClass = RxInfo::kPeerMessage;
-
-    Get<TimeSync>().HandleTimeSyncMessage(aRxInfo.mMessage);
-
-exit:
-    return;
-}
-
 Error MleRouter::SendTimeSync(void)
 {
     Error        error = kErrorNone;
