@@ -616,7 +616,7 @@ void Leader::CheckForNetDataGettingFull(const NetworkData &aNetworkData, uint16_
         leaderClone.MarkAsClone();
         SuccessOrAssert(CopyNetworkData(kFullSet, leaderClone));
 
-        if (aOldRloc16 != Mac::kShortAddrInvalid)
+        if (aOldRloc16 != Mle::kInvalidRloc16)
         {
             leaderClone.RemoveBorderRouter(aOldRloc16, kMatchModeRloc16);
         }
@@ -680,10 +680,7 @@ exit:
     if (!mIsClone)
 #endif
     {
-        if (error != kErrorNone)
-        {
-            LogNote("Failed to register network data: %s", ErrorToString(error));
-        }
+        LogWarnOnError(error, "register network data");
     }
 }
 
@@ -1361,45 +1358,6 @@ void Leader::HandleTimer(void)
     }
 }
 
-#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
-bool Leader::ContainsOmrPrefix(const Ip6::Prefix &aPrefix)
-{
-    PrefixTlv *prefixTlv;
-    bool       contains = false;
-
-    VerifyOrExit(BorderRouter::RoutingManager::IsValidOmrPrefix(aPrefix));
-
-    prefixTlv = FindPrefix(aPrefix);
-    VerifyOrExit(prefixTlv != nullptr);
-
-    for (int i = 0; i < 2; i++)
-    {
-        const BorderRouterTlv *borderRouter = prefixTlv->FindSubTlv<BorderRouterTlv>(/* aStable */ (i == 0));
-
-        if (borderRouter == nullptr)
-        {
-            continue;
-        }
-
-        for (const BorderRouterEntry *entry = borderRouter->GetFirstEntry(); entry <= borderRouter->GetLastEntry();
-             entry                          = entry->GetNext())
-        {
-            OnMeshPrefixConfig config;
-
-            config.SetFrom(*prefixTlv, *borderRouter, *entry);
-
-            if (BorderRouter::RoutingManager::IsValidOmrPrefix(config))
-            {
-                ExitNow(contains = true);
-            }
-        }
-    }
-
-exit:
-    return contains;
-}
-#endif
-
 //---------------------------------------------------------------------------------------------------------------------
 // Leader::ContextIds
 
@@ -1476,8 +1434,7 @@ void Leader::ContextIds::SetRemoveTime(uint8_t aId, TimeMilli aTime)
 
 void Leader::ContextIds::HandleTimer(void)
 {
-    TimeMilli now      = TimerMilli::GetNow();
-    TimeMilli nextTime = now.GetDistantFuture();
+    NextFireTime nextTime;
 
 #if OPENTHREAD_CONFIG_BORDER_ROUTER_SIGNAL_NETWORK_DATA_FULL
     OT_ASSERT(!mIsClone);
@@ -1490,21 +1447,18 @@ void Leader::ContextIds::HandleTimer(void)
             continue;
         }
 
-        if (now >= GetRemoveTime(id))
+        if (nextTime.GetNow() >= GetRemoveTime(id))
         {
             MarkAsUnallocated(id);
             Get<Leader>().RemoveContext(id);
         }
         else
         {
-            nextTime = Min(nextTime, GetRemoveTime(id));
+            nextTime.UpdateIfEarlier(GetRemoveTime(id));
         }
     }
 
-    if (nextTime != now.GetDistantFuture())
-    {
-        Get<Leader>().mTimer.FireAt(nextTime);
-    }
+    Get<Leader>().mTimer.FireAt(nextTime);
 }
 
 } // namespace NetworkData

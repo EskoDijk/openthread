@@ -233,7 +233,7 @@ template <> otError Br::Process<Cmd("omrprefix")>(Arg aArgs[])
 
         OutputFormat("%s", outputPrefixTypes == kPrefixTypeFavored ? "" : "Favored: ");
         OutputIp6Prefix(favored);
-        OutputLine(" prf:%s", Interpreter::PreferenceToString(preference));
+        OutputLine(" prf:%s", PreferenceToString(preference));
     }
 
 exit:
@@ -365,7 +365,7 @@ template <> otError Br::Process<Cmd("nat64prefix")>(Arg aArgs[])
 
         OutputFormat("%s", outputPrefixTypes == kPrefixTypeFavored ? "" : "Favored: ");
         OutputIp6Prefix(favored);
-        OutputLine(" prf:%s", Interpreter::PreferenceToString(preference));
+        OutputLine(" prf:%s", PreferenceToString(preference));
     }
 
 exit:
@@ -424,11 +424,11 @@ template <> otError Br::Process<Cmd("prefixtable")>(Arg aArgs[])
         }
         else
         {
-            OutputFormat("route-prf:%s, ", Interpreter::PreferenceToString(entry.mRoutePreference));
+            OutputFormat("route-prf:%s, ", PreferenceToString(entry.mRoutePreference));
         }
 
         OutputFormat("router:");
-        OutputRouterInfo(entry.mRouter);
+        OutputRouterInfo(entry.mRouter, kShortVersion);
     }
 
 exit:
@@ -485,6 +485,25 @@ template <> otError Br::Process<Cmd("pd")>(Arg aArgs[])
 
         OutputLine("%s", Stringify(otBorderRoutingDhcp6PdGetState(GetInstancePtr()), kDhcpv6PdStateStrings));
     }
+    /**
+     * @cli br pd omrprefix
+     * @code
+     * br pd omrprefix
+     * 2001:db8:cafe:0:0/64 lifetime:1800 preferred:1800
+     * Done
+     * @endcode
+     * @par api_copy
+     * #otBorderRoutingGetPdOmrPrefix
+     */
+    else if (aArgs[0] == "omrprefix")
+    {
+        otBorderRoutingPrefixTableEntry entry;
+
+        SuccessOrExit(error = otBorderRoutingGetPdOmrPrefix(GetInstancePtr(), &entry));
+
+        OutputIp6Prefix(entry.mPrefix);
+        OutputLine(" lifetime:%lu preferred:%lu", ToUlong(entry.mValidLifetime), ToUlong(entry.mPreferredLifetime));
+    }
     else
     {
         ExitNow(error = OT_ERROR_INVALID_COMMAND);
@@ -499,7 +518,7 @@ exit:
  * @cli br routers
  * @code
  * br routers
- * ff02:0:0:0:0:0:0:1 (M:0 O:0 Stub:1)
+ * ff02:0:0:0:0:0:0:1 (M:0 O:0 Stub:1) ms-since-rx:1505 reachable:yes
  * Done
  * @endcode
  * @par
@@ -510,6 +529,10 @@ exit:
  *   - M: Managed Address Config flag
  *   - O: Other Config flag
  *   - Stub: Stub Router flag (indicates whether the router is a stub router)
+ * - Milliseconds since last received message from this router
+ * - Reachability flag: A router is marked as unreachable if it fails to respond to multiple Neighbor Solicitation
+ *   probes.
+ * - `(this BR)` is appended when the router is the local device itself.
  * @sa otBorderRoutingGetNextRouterEntry
  */
 template <> otError Br::Process<Cmd("routers")>(Arg aArgs[])
@@ -524,18 +547,31 @@ template <> otError Br::Process<Cmd("routers")>(Arg aArgs[])
 
     while (otBorderRoutingGetNextRouterEntry(GetInstancePtr(), &iterator, &entry) == OT_ERROR_NONE)
     {
-        OutputRouterInfo(entry);
+        OutputRouterInfo(entry, kLongVersion);
     }
 
 exit:
     return error;
 }
 
-void Br::OutputRouterInfo(const otBorderRoutingRouterEntry &aEntry)
+void Br::OutputRouterInfo(const otBorderRoutingRouterEntry &aEntry, RouterOutputMode aMode)
 {
     OutputIp6Address(aEntry.mAddress);
-    OutputLine(" (M:%u O:%u Stub:%u)", aEntry.mManagedAddressConfigFlag, aEntry.mOtherConfigFlag,
-               aEntry.mStubRouterFlag);
+    OutputFormat(" (M:%u O:%u Stub:%u)", aEntry.mManagedAddressConfigFlag, aEntry.mOtherConfigFlag,
+                 aEntry.mStubRouterFlag);
+
+    if (aMode == kLongVersion)
+    {
+        OutputFormat(" ms-since-rx:%lu reachable:%s", ToUlong(aEntry.mMsecSinceLastUpdate),
+                     aEntry.mIsReachable ? "yes" : "no");
+
+        if (aEntry.mIsLocalDevice)
+        {
+            OutputFormat(" (this BR)");
+        }
+    }
+
+    OutputNewLine();
 }
 
 template <> otError Br::Process<Cmd("raoptions")>(Arg aArgs[])
@@ -594,8 +630,7 @@ template <> otError Br::Process<Cmd("rioprf")>(Arg aArgs[])
      */
     if (aArgs[0].IsEmpty())
     {
-        OutputLine("%s",
-                   Interpreter::PreferenceToString(otBorderRoutingGetRouteInfoOptionPreference(GetInstancePtr())));
+        OutputLine("%s", PreferenceToString(otBorderRoutingGetRouteInfoOptionPreference(GetInstancePtr())));
     }
     /**
      * @cli br rioprf clear
@@ -648,7 +683,7 @@ template <> otError Br::Process<Cmd("routeprf")>(Arg aArgs[])
      */
     if (aArgs[0].IsEmpty())
     {
-        OutputLine("%s", Interpreter::PreferenceToString(otBorderRoutingGetRoutePreference(GetInstancePtr())));
+        OutputLine("%s", PreferenceToString(otBorderRoutingGetRoutePreference(GetInstancePtr())));
     }
     /**
      * @cli br routeprf clear

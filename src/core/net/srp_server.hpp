@@ -912,6 +912,7 @@ private:
     static constexpr AddressMode kDefaultAddressMode =
         static_cast<AddressMode>(OPENTHREAD_CONFIG_SRP_SERVER_DEFAULT_ADDRESS_MODE);
 
+    static constexpr uint16_t kUninitializedPort      = 0;
     static constexpr uint16_t kAnycastAddressModePort = 53;
 
     // Metadata for a received SRP Update message.
@@ -971,8 +972,9 @@ private:
     void              Disable(void);
     void              Start(void);
     void              Stop(void);
+    void              InitPort(void);
     void              SelectPort(void);
-    void              PrepareSocket(void);
+    Error             PrepareSocket(void);
     Ip6::Udp::Socket &GetSocket(void);
     LinkedList<Host> &GetHosts(void) { return mHosts; }
 
@@ -1032,7 +1034,6 @@ private:
                              uint32_t                 aKeyLease,
                              bool                     mUseShortLeaseOption,
                              const Ip6::MessageInfo  &aMessageInfo);
-    static void HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
     void        HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
     void        HandleLeaseTimer(void);
     static void HandleOutstandingUpdatesTimer(Timer &aTimer);
@@ -1048,8 +1049,9 @@ private:
     using LeaseTimer           = TimerMilliIn<Server, &Server::HandleLeaseTimer>;
     using UpdateTimer          = TimerMilliIn<Server, &Server::HandleOutstandingUpdatesTimer>;
     using CompletedUpdatesTask = TaskletIn<Server, &Server::ProcessCompletedUpdates>;
+    using ServerSocket         = Ip6::Udp::SocketIn<Server, &Server::HandleUdpReceive>;
 
-    Ip6::Udp::Socket mSocket;
+    ServerSocket mSocket;
 
     Callback<otSrpServerServiceUpdateHandler> mServiceUpdateHandler;
 

@@ -52,6 +52,8 @@ OT_BUILD_OPTIONS=(
     "-DOT_DHCP6_CLIENT=ON"
     "-DOT_DHCP6_SERVER=ON"
     "-DOT_DIAGNOSTIC=ON"
+    "-DOT_DNSSD_DISCOVERY_PROXY=ON"
+    "-DOT_DNSSD_SERVER=ON"
     "-DOT_DNS_CLIENT=ON"
     "-DOT_DNS_DSO=ON"
     "-DOT_ECDSA=ON"
@@ -61,6 +63,7 @@ OT_BUILD_OPTIONS=(
     "-DOT_JOINER=ON"
     "-DOT_LOG_LEVEL_DYNAMIC=ON"
     "-DOT_MAC_FILTER=ON"
+    "-DOT_MDNS=ON"
     "-DOT_MESH_DIAG=ON"
     "-DOT_NAT64_BORDER_ROUTING=ON"
     "-DOT_NAT64_TRANSLATOR=ON"
@@ -85,8 +88,8 @@ readonly OT_BUILD_OPTIONS
 
 OT_CFLAGS=(
     "-DMBEDTLS_DEBUG_C"
-    "-I$(pwd)/third_party/mbedtls"
-    "-I$(pwd)/third_party/mbedtls/repo/include"
+    "-isystem $(pwd)/third_party/mbedtls"
+    "-isystem $(pwd)/third_party/mbedtls/repo/include"
     '-DMBEDTLS_CONFIG_FILE=\"mbedtls-config.h\"'
 )
 readonly OT_CFLAGS

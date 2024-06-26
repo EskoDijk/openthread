@@ -68,6 +68,9 @@ RegisterLogModule("Ip6");
 Ip6::Ip6(Instance &aInstance)
     : InstanceLocator(aInstance)
     , mIsReceiveIp6FilterEnabled(false)
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
+    , mTmfOriginFilterEnabled(true)
+#endif
     , mSendQueueTask(aInstance)
     , mIcmp(aInstance)
     , mUdp(aInstance)
@@ -651,8 +654,8 @@ Error Ip6::HandleFragment(Message &aMessage)
     offset          = FragmentHeader::FragmentOffsetToBytes(fragmentHeader.GetOffset());
     payloadFragment = aMessage.GetLength() - aMessage.GetOffset() - sizeof(fragmentHeader);
 
-    LogInfo("Fragment with id %d received > %d bytes, offset %d", fragmentHeader.GetIdentification(), payloadFragment,
-            offset);
+    LogInfo("Fragment with id %lu received > %u bytes, offset %u", ToUlong(fragmentHeader.GetIdentification()),
+            payloadFragment, offset);
 
     if (offset + payloadFragment + aMessage.GetOffset() > kMaxAssembledDatagramLength)
     {
@@ -714,7 +717,7 @@ exit:
             mReassemblyList.DequeueAndFree(*message);
         }
 
-        LogWarn("Reassembly failed: %s", ErrorToString(error));
+        LogWarnOnError(error, "reassemble");
     }
 
     if (isFragmented)
@@ -769,11 +772,8 @@ void Ip6::SendIcmpError(Message &aMessage, Icmp::Header::Type aIcmpType, Icmp::H
     error = mIcmp.SendError(aIcmpType, aIcmpCode, messageInfo, aMessage);
 
 exit:
-
-    if (error != kErrorNone)
-    {
-        LogWarn("Failed to send ICMP error: %s", ErrorToString(error));
-    }
+    LogWarnOnError(error, "send ICMP");
+    OT_UNUSED_VARIABLE(error);
 }
 
 #else
@@ -916,11 +916,7 @@ Error Ip6::HandlePayload(Header            &aIp6Header,
     }
 
 exit:
-    if (error != kErrorNone)
-    {
-        LogNote("Failed to handle payload: %s", ErrorToString(error));
-    }
-
+    LogWarnOnError(error, "handle payload");
     return error;
 }
 
@@ -939,7 +935,7 @@ Error Ip6::PassToHost(OwnedPtr<Message> &aMessagePtr,
     Error             error = kErrorNone;
     OwnedPtr<Message> messagePtr;
 
-    VerifyOrExit(aMessagePtr->IsLoopbackToHostAllowed(), error = kErrorNoRoute);
+    VerifyOrExit(aMessagePtr->IsLoopbackToHostAllowed());
 
     VerifyOrExit(mReceiveIp6DatagramCallback.IsSet(), error = kErrorNoRoute);
 
@@ -955,17 +951,6 @@ Error Ip6::PassToHost(OwnedPtr<Message> &aMessagePtr,
 
     if (mIsReceiveIp6FilterEnabled && aApplyFilter)
     {
-#if !OPENTHREAD_CONFIG_PLATFORM_NETIF_ENABLE
-        // Do not pass messages sent to an RLOC/ALOC, except
-        // Service Locator
-
-        bool isLocator = Get<Mle::Mle>().IsMeshLocalAddress(aMessageInfo.GetSockAddr()) &&
-                         aMessageInfo.GetSockAddr().GetIid().IsLocator();
-
-        VerifyOrExit(!isLocator || aMessageInfo.GetSockAddr().GetIid().IsAnycastServiceLocator(),
-                     error = kErrorNoRoute);
-#endif
-
         switch (aIpProto)
         {
         case kProtoIcmp6:
@@ -1040,7 +1025,8 @@ Error Ip6::PassToHost(OwnedPtr<Message> &aMessagePtr,
     // than realm-local, set the hop limit to 1 before sending to host, so this packet
     // will not be forwarded by host.
     if (aMessageInfo.GetSockAddr().IsMulticastLargerThanRealmLocal() &&
-        (aMessageInfo.GetPeerAddr().IsLinkLocal() || (Get<Mle::Mle>().IsMeshLocalAddress(aMessageInfo.GetPeerAddr()))))
+        (aMessageInfo.GetPeerAddr().IsLinkLocalUnicast() ||
+         (Get<Mle::Mle>().IsMeshLocalAddress(aMessageInfo.GetPeerAddr()))))
     {
         messagePtr->Write<uint8_t>(Header::kHopLimitFieldOffset, 1);
     }
@@ -1137,10 +1123,6 @@ Error Ip6::HandleDatagram(OwnedPtr<Message> aMessagePtr, bool aIsReassembled)
         {
             receive = true;
         }
-        else if (Get<ThreadNetif>().IsMulticastPromiscuousEnabled())
-        {
-            forwardHost = true;
-        }
     }
     else
     {
@@ -1150,9 +1132,9 @@ Error Ip6::HandleDatagram(OwnedPtr<Message> aMessagePtr, bool aIsReassembled)
         {
             receive = true;
         }
-        else if (!aMessagePtr->IsOriginThreadNetif() || !header.GetDestination().IsLinkLocal())
+        else if (!aMessagePtr->IsOriginThreadNetif() || !header.GetDestination().IsLinkLocalUnicast())
         {
-            if (header.GetDestination().IsLinkLocal())
+            if (header.GetDestination().IsLinkLocalUnicast())
             {
                 forwardThread = true;
             }
@@ -1257,7 +1239,11 @@ Error Ip6::HandleDatagram(OwnedPtr<Message> aMessagePtr, bool aIsReassembled)
                 error = aMessagePtr->Read(aMessagePtr->GetOffset() + Udp::Header::kDestPortFieldOffset, destPort));
             destPort = BigEndian::HostSwap16(destPort);
 
-            if (destPort == Tmf::kUdpPort)
+            if (destPort == Tmf::kUdpPort
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
+                && mTmfOriginFilterEnabled
+#endif
+            )
             {
                 LogNote("Dropping TMF message from untrusted origin");
                 ExitNow(error = kErrorDrop);
@@ -1445,8 +1431,8 @@ void Ip6::UpdateBorderRoutingCounters(const Header &aHeader, uint16_t aMessageLe
     otPacketsAndBytes       *counter         = nullptr;
     otPacketsAndBytes       *internetCounter = nullptr;
 
-    VerifyOrExit(!aHeader.GetSource().IsLinkLocal());
-    VerifyOrExit(!aHeader.GetDestination().IsLinkLocal());
+    VerifyOrExit(!aHeader.GetSource().IsLinkLocalUnicast());
+    VerifyOrExit(!aHeader.GetDestination().IsLinkLocalUnicast());
     VerifyOrExit(aHeader.GetSource().GetPrefix() != Get<Mle::Mle>().GetMeshLocalPrefix());
     VerifyOrExit(aHeader.GetDestination().GetPrefix() != Get<Mle::Mle>().GetMeshLocalPrefix());
 

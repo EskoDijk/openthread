@@ -28,7 +28,7 @@
 
 /**
  * @file
- *   This file includes definitions for infrastructure DNS-SD (mDNS) platform.
+ *   This file includes definitions for DNS-SD module.
  */
 
 #ifndef DNSSD_HPP_
@@ -36,7 +36,17 @@
 
 #include "openthread-core-config.h"
 
-#if OPENTHREAD_CONFIG_PLATFORM_DNSSD_ENABLE
+#if OPENTHREAD_CONFIG_PLATFORM_DNSSD_ENABLE || OPENTHREAD_CONFIG_MULTICAST_DNS_ENABLE
+
+#if !OPENTHREAD_CONFIG_PLATFORM_DNSSD_ALLOW_RUN_TIME_SELECTION
+#if OPENTHREAD_CONFIG_PLATFORM_DNSSD_ENABLE && OPENTHREAD_CONFIG_MULTICAST_DNS_ENABLE
+#error "Must enable either `PLATFORM_DNSSD_ENABLE` or `MULTICAST_DNS_ENABLE` and not both."
+#endif
+#else
+#if !OPENTHREAD_CONFIG_PLATFORM_DNSSD_ENABLE || !OPENTHREAD_CONFIG_MULTICAST_DNS_ENABLE
+#error "`PLATFORM_DNSSD_ALLOW_RUN_TIME_SELECTION` requires both `PLATFORM_DNSSD_ENABLE` or `MULTICAST_DNS_ENABLE`.".
+#endif
+#endif // !OPENTHREAD_CONFIG_PLATFORM_DNSSD_ALLOW_RUN_TIME_SELECTION
 
 #include <openthread/platform/dnssd.h>
 
@@ -51,7 +61,10 @@ namespace ot {
  * @addtogroup core-dns
  *
  * @brief
- *   This module includes definitions for DNS-SD (mDNS) platform.
+ *   This module includes definitions for DNS-SD (mDNS) APIs used by other modules in OT (e.g. advertising proxy).
+ *
+ *   The DNS-SD is implemented either using the native mDNS module in OpenThread or using `otPlatDnssd` platform
+ *   APIs (delegating the DNS-SD implementation to platform layer).
  *
  * @{
  *
@@ -60,7 +73,7 @@ namespace ot {
 extern "C" void otPlatDnssdStateHandleStateChange(otInstance *aInstance);
 
 /**
- * Represents DNS-SD (mDNS) platform.
+ * Represents DNS-SD module.
  *
  */
 class Dnssd : public InstanceLocator, private NonCopyable
@@ -80,6 +93,15 @@ public:
 
     typedef otPlatDnssdRequestId        RequestId;        ///< A request ID.
     typedef otPlatDnssdRegisterCallback RegisterCallback; ///< The registration request callback
+    typedef otPlatDnssdBrowseCallback   BrowseCallback;   ///< Browser callback.
+    typedef otPlatDnssdSrvCallback      SrvCallback;      ///< SRV callback.
+    typedef otPlatDnssdTxtCallback      TxtCallback;      ///< TXT callback.
+    typedef otPlatDnssdAddressCallback  AddressCallback;  ///< Address callback
+    typedef otPlatDnssdBrowseResult     BrowseResult;     ///< Browser result.
+    typedef otPlatDnssdSrvResult        SrvResult;        ///< SRV result.
+    typedef otPlatDnssdTxtResult        TxtResult;        ///< TXT result.
+    typedef otPlatDnssdAddressResult    AddressResult;    ///< Address result.
+    typedef otPlatDnssdAddressAndTtl    AddressAndTtl;    ///< Address and TTL.
 
     class Host : public otPlatDnssdHost, public Clearable<Host> ///< Host information.
     {
@@ -90,6 +112,22 @@ public:
     };
 
     class Key : public otPlatDnssdKey, public Clearable<Key> ///< Key information
+    {
+    };
+
+    class Browser : public otPlatDnssdBrowser, public Clearable<Browser> ///< Browser.
+    {
+    };
+
+    class SrvResolver : public otPlatDnssdSrvResolver, public Clearable<SrvResolver> ///< SRV resolver.
+    {
+    };
+
+    class TxtResolver : public otPlatDnssdTxtResolver, public Clearable<TxtResolver> ///< TXT resolver.
+    {
+    };
+
+    class AddressResolver : public otPlatDnssdAddressResolver, public Clearable<AddressResolver> ///< Address resolver.
     {
     };
 
@@ -261,8 +299,151 @@ public:
      */
     void UnregisterKey(const Key &aKey, RequestId aRequestId, RegisterCallback aCallback);
 
+    /**
+     * Starts a service browser.
+     *
+     * Refer to the documentation for `otPlatDnssdStartBrowser()` for a more detailed description of the behavior
+     * of this method.
+     *
+     * @param[in] aBrowser    The browser to be started.
+     *
+     */
+    void StartBrowser(const Browser &aBrowser);
+
+    /**
+     * Stops a service browser.
+     *
+     * Refer to the documentation for `otPlatDnssdStopBrowser()` for a more detailed description of the behavior
+     * of this method.
+     *
+     * @param[in] aBrowser    The browser to stop.
+     *
+     */
+    void StopBrowser(const Browser &aBrowser);
+
+    /**
+     * Starts an SRV record resolver.
+     *
+     * Refer to the documentation for `otPlatDnssdStartSrvResolver()` for a more detailed description of the behavior
+     * of this method.
+     *
+     * @param[in] aResolver    The resolver to be started.
+     *
+     */
+    void StartSrvResolver(const SrvResolver &aResolver);
+
+    /**
+     * Stops an SRV record resolver.
+     *
+     * Refer to the documentation for `otPlatDnssdStopSrvResolver()` for a more detailed description of the behavior
+     * of this method.
+     *
+     * @param[in] aResolver    The resolver to stop.
+     *
+     */
+    void StopSrvResolver(const SrvResolver &aResolver);
+
+    /**
+     * Starts a TXT record resolver.
+     *
+     * Refer to the documentation for `otPlatDnssdStartTxtResolver()` for a more detailed description of the behavior
+     * of this method.
+     *
+     * @param[in] aResolver    The resolver to be started.
+     *
+     */
+    void StartTxtResolver(const TxtResolver &aResolver);
+
+    /**
+     * Stops a TXT record resolver.
+     *
+     * Refer to the documentation for `otPlatDnssdStopTxtResolver()` for a more detailed description of the behavior
+     * of this method.
+     *
+     * @param[in] aResolver    The resolver to stop.
+     *
+     */
+    void StopTxtResolver(const TxtResolver &aResolver);
+
+    /**
+     * Starts an IPv6 address resolver.
+     *
+     * Refer to the documentation for `otPlatDnssdStartIp6AddressResolver()` for a more detailed description of the
+     * behavior of this method.
+     *
+     * @param[in] aResolver    The resolver to be started.
+     *
+     */
+    void StartIp6AddressResolver(const AddressResolver &aResolver);
+
+    /**
+     * Stops an IPv6 address resolver.
+     *
+     * Refer to the documentation for `otPlatDnssdStopIp6AddressResolver()` for a more detailed description of the
+     * behavior of this method.
+     *
+     * @param[in] aResolver    The resolver to stop.
+     *
+     */
+    void StopIp6AddressResolver(const AddressResolver &aResolver);
+
+    /**
+     * Starts an IPv4 address resolver.
+     *
+     * Refer to the documentation for `otPlatDnssdStartIp4AddressResolver()` for a more detailed description of the
+     * behavior of this method.
+     *
+     * @param[in] aResolver    The resolver to be started.
+     *
+     */
+    void StartIp4AddressResolver(const AddressResolver &aResolver);
+
+    /**
+     * Stops an IPv4 address resolver.
+     *
+     * Refer to the documentation for `otPlatDnssdStopIp4AddressResolver()` for a more detailed description of the
+     * behavior of this method.
+     *
+     * @param[in] aResolver    The resolver to stop.
+     *
+     */
+    void StopIp4AddressResolver(const AddressResolver &aResolver);
+
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENABLE
+    /**
+     * Handles native mDNS state change.
+     *
+     * This is used to notify `Dnssd` when `Multicast::Dns::Core` gets enabled or disabled.
+     *
+     */
+    void HandleMdnsCoreStateChange(void);
+#endif
+
+#if OPENTHREAD_CONFIG_PLATFORM_DNSSD_ALLOW_RUN_TIME_SELECTION
+    /**
+     * Selects whether to use the native mDNS or the platform `otPlatDnssd` APIs.
+     *
+     * @param[in] aUseMdns    TRUE to use the native mDNS module, FALSE to use platform APIs.
+     *
+     */
+    void SetUseNativeMdns(bool aUseMdns) { mUseNativeMdns = aUseMdns; }
+
+    /**
+     * Indicates whether the `Dnssd` is using the native mDNS or the platform `otPlatDnssd` APIs.
+     *
+     * @retval TRUE    `Dnssd` is using the native mDSN module.
+     * @retval FALSE   `Dnssd` is using the platform `otPlatDnssd` APIs.
+     *
+     */
+    bool ShouldUseNativeMdns(void) const { return mUseNativeMdns; }
+#endif
+
 private:
     void HandleStateChange(void);
+
+#if OPENTHREAD_CONFIG_PLATFORM_DNSSD_ALLOW_RUN_TIME_SELECTION
+    bool mUseNativeMdns;
+#endif
 };
 
 /**
@@ -277,6 +458,6 @@ DefineCoreType(otPlatDnssdKey, Dnssd::Key);
 
 } // namespace ot
 
-#endif // OPENTHREAD_CONFIG_PLATFORM_DNSSD_ENABLE
+#endif // OPENTHREAD_CONFIG_PLATFORM_DNSSD_ENABLE || OPENTHREAD_CONFIG_MULTICAST_DNS_ENABLE
 
 #endif // DNSSD_HPP_

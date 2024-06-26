@@ -343,7 +343,7 @@ bool Address::IsLoopback(void) const
             mFields.m32[3] == BigEndian::HostSwap32(1));
 }
 
-bool Address::IsLinkLocal(void) const
+bool Address::IsLinkLocalUnicast(void) const
 {
     return (mFields.m16[0] & BigEndian::HostSwap16(0xffc0)) == BigEndian::HostSwap16(0xfe80);
 }
@@ -363,6 +363,8 @@ void Address::SetToLinkLocalAddress(const InterfaceIdentifier &aIid)
 }
 
 bool Address::IsLinkLocalMulticast(void) const { return IsMulticast() && (GetScope() == kLinkLocalScope); }
+
+bool Address::IsLinkLocalUnicastOrMulticast(void) const { return IsLinkLocalUnicast() || IsLinkLocalMulticast(); }
 
 bool Address::IsLinkLocalAllNodesMulticast(void) const { return (*this == GetLinkLocalAllNodesMulticast()); }
 
@@ -458,7 +460,7 @@ uint8_t Address::GetScope(void) const
     {
         rval = mFields.m8[1] & 0xf;
     }
-    else if (IsLinkLocal())
+    else if (IsLinkLocalUnicast())
     {
         rval = kLinkLocalScope;
     }
@@ -586,22 +588,9 @@ Error Address::ParseFrom(const char *aString, char aTerminatorChar)
 
         while (true)
         {
-            char    c = *aString;
             uint8_t digit;
 
-            if (('A' <= c) && (c <= 'F'))
-            {
-                digit = static_cast<uint8_t>(c - 'A' + 10);
-            }
-            else if (('a' <= c) && (c <= 'f'))
-            {
-                digit = static_cast<uint8_t>(c - 'a' + 10);
-            }
-            else if (('0' <= c) && (c <= '9'))
-            {
-                digit = static_cast<uint8_t>(c - '0');
-            }
-            else
+            if (ParseHexDigit(*aString, digit) != kErrorNone)
             {
                 break;
             }

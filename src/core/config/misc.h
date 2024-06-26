@@ -142,6 +142,16 @@
 #endif
 
 /**
+ * @def OPENTHREAD_CONFIG_VERHOEFF_CHECKSUM_ENABLE
+ *
+ * Define to 1 to enable Verhoeff checksum utility module.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_VERHOEFF_CHECKSUM_ENABLE
+#define OPENTHREAD_CONFIG_VERHOEFF_CHECKSUM_ENABLE OPENTHREAD_CONFIG_BORDER_AGENT_EPHEMERAL_KEY_ENABLE
+#endif
+
+/**
  * @def OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE
  *
  * Define to 1 to enable multiple instance support.
@@ -597,6 +607,20 @@
  */
 #ifndef OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
 #define OPENTHREAD_CONFIG_BLE_TCAT_ENABLE 0
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_PLATFORM_LOG_CRASH_DUMP_ENABLE
+ *
+ * Define to 1 to enable crash dump logging.
+ *
+ * On platforms that support crash dump logging, this feature will log a crash dump using the OT Debug Log service.
+ *
+ * Logging a crash dump requires the platform to implement the `otPlatLogCrashDump()` function.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_PLATFORM_LOG_CRASH_DUMP_ENABLE
+#define OPENTHREAD_CONFIG_PLATFORM_LOG_CRASH_DUMP_ENABLE 0
 #endif
 
 /**

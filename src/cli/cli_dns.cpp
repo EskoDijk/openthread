@@ -94,7 +94,7 @@ template <> otError Dns::Process<Cmd("compression")>(Arg aArgs[])
     {
         bool enable;
 
-        SuccessOrExit(error = Interpreter::ParseEnableOrDisable(aArgs[0], enable));
+        SuccessOrExit(error = ParseEnableOrDisable(aArgs[0], enable));
         otDnsSetNameCompressionEnabled(enable);
     }
 
@@ -422,8 +422,7 @@ otError Dns::GetDnsConfig(Arg aArgs[], otDnsQueryConfig *&aConfig)
 
     VerifyOrExit(!aArgs[0].IsEmpty(), aConfig = nullptr);
 
-    SuccessOrExit(error = Interpreter::ParseToIp6Address(GetInstancePtr(), aArgs[0], aConfig->mServerSockAddr.mAddress,
-                                                         nat64Synth));
+    SuccessOrExit(error = ParseToIp6Address(GetInstancePtr(), aArgs[0], aConfig->mServerSockAddr.mAddress, nat64Synth));
     if (nat64Synth)
     {
         OutputFormat("Synthesized IPv6 DNS server address: ");

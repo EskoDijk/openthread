@@ -40,13 +40,19 @@
 typedef struct utilsSocket
 {
     bool     mInitialized; ///< Whether or not initialized.
+    bool     mUseIp6;      ///< Whether IPv6 or IPv4.
     int      mTxFd;        ///< RX file descriptor.
     int      mRxFd;        ///< TX file descriptor.
     uint16_t mPortBase;    ///< Base port number value.
     uint16_t mPort;        ///< The port number used by this node
+    union
+    {
+        struct sockaddr_in  mSockAddr4; ///< The IPv4 group sock address.
+        struct sockaddr_in6 mSockAddr6; ///< The IPv4 group sock address.
+    } mGroupAddr;                       ///< The group sock address for simulating radio.
 } utilsSocket;
 
-extern const char *gLocalHost; ///< Local host address to use for sockets
+extern const char *gLocalInterface; ///< Local interface name or address to use for sockets
 
 /**
  * Adds a file descriptor (FD) to a given FD set.

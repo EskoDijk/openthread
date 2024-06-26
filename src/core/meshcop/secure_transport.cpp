@@ -87,7 +87,7 @@ SecureTransport::SecureTransport(Instance &aInstance, bool aLayerTwoSecurity, bo
     , mMaxConnectionAttempts(0)
     , mRemainingConnectionAttempts(0)
     , mReceiveMessage(nullptr)
-    , mSocket(aInstance)
+    , mSocket(aInstance, *this)
     , mMessageSubType(Message::kSubTypeNone)
     , mMessageDefaultSubType(Message::kSubTypeNone)
 {
@@ -158,7 +158,7 @@ Error SecureTransport::Open(ReceiveHandler aReceiveHandler, ConnectedHandler aCo
 
     VerifyOrExit(IsStateClosed(), error = kErrorAlready);
 
-    SuccessOrExit(error = mSocket.Open(&SecureTransport::HandleReceive, this));
+    SuccessOrExit(error = mSocket.Open());
 
     mConnectedCallback.Set(aConnectedHandler, aContext);
     mReceiveCallback.Set(aReceiveHandler, aContext);
@@ -204,11 +204,6 @@ exit:
     return error;
 }
 
-void SecureTransport::HandleReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
-{
-    static_cast<SecureTransport *>(aContext)->HandleReceive(AsCoreType(aMessage), AsCoreType(aMessageInfo));
-}
-
 void SecureTransport::HandleReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
     VerifyOrExit(!IsStateClosed());
@@ -220,24 +215,18 @@ void SecureTransport::HandleReceive(Message &aMessage, const Ip6::MessageInfo &a
             mRemainingConnectionAttempts--;
         }
 
-        IgnoreError(mSocket.Connect(Ip6::SockAddr(aMessageInfo.GetPeerAddr(), aMessageInfo.GetPeerPort())));
-
         mMessageInfo.SetPeerAddr(aMessageInfo.GetPeerAddr());
         mMessageInfo.SetPeerPort(aMessageInfo.GetPeerPort());
         mMessageInfo.SetIsHostInterface(aMessageInfo.IsHostInterface());
 
-        if (Get<ThreadNetif>().HasUnicastAddress(aMessageInfo.GetSockAddr()))
-        {
-            mMessageInfo.SetSockAddr(aMessageInfo.GetSockAddr());
-        }
-
+        mMessageInfo.SetSockAddr(aMessageInfo.GetSockAddr());
         mMessageInfo.SetSockPort(aMessageInfo.GetSockPort());
 
         SuccessOrExit(Setup(false));
     }
     else
     {
-        // Once DTLS session is started, communicate only with a peer.
+        // Once DTLS session is started, communicate only with a single peer.
         VerifyOrExit((mMessageInfo.GetPeerAddr() == aMessageInfo.GetPeerAddr()) &&
                      (mMessageInfo.GetPeerPort() == aMessageInfo.GetPeerPort()));
     }
@@ -514,7 +503,6 @@ void SecureTransport::Disconnect(void)
     mTimer.Start(kGuardTimeNewConnectionMilli);
 
     mMessageInfo.Clear();
-    IgnoreError(mSocket.Connect());
 
     FreeMbedtls();
 
@@ -645,15 +633,13 @@ Error SecureTransport::GetPeerSubjectAttributeByOid(const char *aOid,
 
     VerifyOrExit(aAttributeBuffer != nullptr, error = kErrorNoBufs);
     VerifyOrExit(peerCert != nullptr, error = kErrorInvalidState);
+
     data = mbedtls_asn1_find_named_data(&peerCert->subject, aOid, aOidLength);
     VerifyOrExit(data != nullptr, error = kErrorNotFound);
+
     length = data->val.len;
     VerifyOrExit(length <= attributeBufferSize, error = kErrorNoBufs);
-
-    if (aAttributeLength != nullptr)
-    {
-        *aAttributeLength = length;
-    }
+    *aAttributeLength = length;
 
     if (aAsn1Type != nullptr)
     {
@@ -734,28 +720,28 @@ Error SecureTransport::GetThreadAttributeFromCertificate(const mbedtls_x509_crt 
         ret = mbedtls_asn1_get_bool(&p, endExtData, &isCritical);
         VerifyOrExit(ret == 0 || ret == MBEDTLS_ERR_ASN1_UNEXPECTED_TAG, error = kErrorParse);
 
-        // Data should be octet string type
+        // Data must be octet string type, see https://datatracker.ietf.org/doc/html/rfc5280#section-4.1
         VerifyOrExit(mbedtls_asn1_get_tag(&p, endExtData, &len, MBEDTLS_ASN1_OCTET_STRING) == 0, error = kErrorParse);
         VerifyOrExit(endExtData == p + len, error = kErrorParse);
 
-        if (isCritical || extnOid.len != sizeof(oid))
+        // TODO: extensions with isCritical == 1 that are unknown should lead to rejection of the entire cert.
+        if (extnOid.len == sizeof(oid) && memcmp(extnOid.p, oid, sizeof(oid)) == 0)
         {
-            continue;
-        }
-
-        if (memcmp(extnOid.p, oid, sizeof(oid)) == 0)
-        {
-            *aAttributeLength = len;
+            // per RFC 5280, octet string must contain ASN.1 Type Length Value octets
+            VerifyOrExit(len >= 2, error = kErrorParse);
+            VerifyOrExit(*(p + 1) == len - 2, error = kErrorParse); // check TLV Length, not Type.
+            *aAttributeLength = len - 2; // strip the ASN.1 Type Length bytes from embedded TLV
 
             if (aAttributeBuffer != nullptr)
             {
-                VerifyOrExit(len <= attributeBufferSize, error = kErrorNoBufs);
-                memcpy(aAttributeBuffer, p, len);
+                VerifyOrExit(*aAttributeLength <= attributeBufferSize, error = kErrorNoBufs);
+                memcpy(aAttributeBuffer, p + 2, *aAttributeLength);
             }
 
             error = kErrorNone;
             break;
         }
+        p += len;
     }
 
 exit:

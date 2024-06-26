@@ -33,6 +33,7 @@
  */
 
 #include "meshcop.hpp"
+#include <openthread/platform/toolchain.h>
 
 #include "common/clearable.hpp"
 #include "common/crc16.hpp"
@@ -95,7 +96,7 @@ bool JoinerPskd::IsPskdValid(const char *aPskdString)
     {
         char c = aPskdString[i];
 
-        VerifyOrExit(isdigit(c) || isupper(c));
+        VerifyOrExit(IsDigit(c) || IsUppercase(c));
         VerifyOrExit(c != 'I' && c != 'O' && c != 'Q' && c != 'Z');
     }
 
@@ -342,16 +343,6 @@ exit:
     return error;
 }
 #endif // OPENTHREAD_FTD
-
-#if OT_SHOULD_LOG_AT(OT_LOG_LEVEL_WARN)
-void LogError(const char *aActionText, Error aError)
-{
-    if (aError != kErrorNone && aError != kErrorAlready)
-    {
-        LogWarn("Failed to %s: %s", aActionText, ErrorToString(aError));
-    }
-}
-#endif
 
 } // namespace MeshCoP
 } // namespace ot

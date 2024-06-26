@@ -98,15 +98,14 @@ Error MeshDiag::DiscoverTopology(const DiscoverConfig &aConfig, DiscoverCallback
             continue;
         }
 
-        destination = Get<Mle::MleRouter>().GetMeshLocal16();
-        destination.GetIid().SetLocator(Mle::Rloc16FromRouterId(routerId));
+        destination.SetToRoutingLocator(Get<Mle::Mle>().GetMeshLocalPrefix(), Mle::Rloc16FromRouterId(routerId));
 
         SuccessOrExit(error = Get<Client>().SendCommand(kUriDiagnosticGetRequest, Message::kPriorityLow, destination,
                                                         tlvs, tlvsLength, HandleDiagGetResponse, this));
     }
 
     mDiscover.mCallback.Set(aCallback, aContext);
-    mState = kStateDicoverTopology;
+    mState = kStateDiscoverTopology;
     mTimer.Start(kResponseTimeout);
 
 exit:
@@ -133,7 +132,7 @@ void MeshDiag::HandleDiagGetResponse(Coap::Message *aMessage, const Ip6::Message
 
     SuccessOrExit(aResult);
     VerifyOrExit(aMessage != nullptr);
-    VerifyOrExit(mState == kStateDicoverTopology);
+    VerifyOrExit(mState == kStateDiscoverTopology);
 
     SuccessOrExit(routerInfo.ParseFrom(*aMessage));
 
@@ -173,11 +172,10 @@ Error MeshDiag::SendQuery(uint16_t aRloc16, const uint8_t *aTlvs, uint8_t aTlvsL
 
     VerifyOrExit(Get<Mle::Mle>().IsAttached(), error = kErrorInvalidState);
     VerifyOrExit(mState == kStateIdle, error = kErrorBusy);
-    VerifyOrExit(Mle::IsActiveRouter(aRloc16), error = kErrorInvalidArgs);
+    VerifyOrExit(Mle::IsRouterRloc16(aRloc16), error = kErrorInvalidArgs);
     VerifyOrExit(Get<RouterTable>().IsAllocated(Mle::RouterIdFromRloc16(aRloc16)), error = kErrorNotFound);
 
-    destination = Get<Mle::MleRouter>().GetMeshLocal16();
-    destination.GetIid().SetLocator(aRloc16);
+    destination.SetToRoutingLocator(Get<Mle::Mle>().GetMeshLocalPrefix(), aRloc16);
 
     SuccessOrExit(error = Get<Client>().SendCommand(kUriDiagnosticGetQuery, Message::kPriorityNormal, destination,
                                                     aTlvs, aTlvsLength));
@@ -437,7 +435,7 @@ void MeshDiag::Cancel(void)
     case kStateQueryRouterNeighborTable:
         break;
 
-    case kStateDicoverTopology:
+    case kStateDiscoverTopology:
         IgnoreError(Get<Tmf::Agent>().AbortTransaction(HandleDiagGetResponse, this));
         break;
     }
@@ -460,7 +458,7 @@ void MeshDiag::Finalize(Error aError)
     case kStateIdle:
         break;
 
-    case kStateDicoverTopology:
+    case kStateDiscoverTopology:
         mDiscover.mCallback.InvokeIfSet(aError, nullptr);
         break;
 

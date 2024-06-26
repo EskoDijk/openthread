@@ -45,6 +45,7 @@
 #include <openthread/instance.h>
 #include <openthread/platform/misc.h>
 
+#include "lib/spinel/coprocessor_type.h"
 #include "lib/spinel/radio_spinel_metrics.h"
 
 #ifdef __cplusplus
@@ -69,21 +70,64 @@ enum
 };
 
 /**
+ * Represents the Co-processor URLs.
+ *
+ */
+typedef struct otPlatformCoprocessorUrls
+{
+    const char *mUrls[OT_PLATFORM_CONFIG_MAX_RADIO_URLS]; ///< Co-processor URLs.
+    uint8_t     mNum;                                     ///< Number of Co-processor URLs.
+} otPlatformCoprocessorUrls;
+
+/**
  * Represents platform specific configurations.
  *
  */
 typedef struct otPlatformConfig
 {
-    const char *mBackboneInterfaceName;                        ///< Backbone network interface name.
-    const char *mInterfaceName;                                ///< Thread network interface name.
-    const char *mRadioUrls[OT_PLATFORM_CONFIG_MAX_RADIO_URLS]; ///< Radio URLs.
-    uint8_t     mRadioUrlNum;                                  ///< Number of Radio URLs.
-    int         mRealTimeSignal;                               ///< The real-time signal for microsecond timer.
-    uint32_t    mSpeedUpFactor;                                ///< Speed up factor.
-    bool        mPersistentInterface;                          ///< Whether persistent the interface
-    bool        mDryRun;                                       ///< If 'DryRun' is set, the posix daemon will exit
-                                                               ///< directly after initialization.
+    const char               *mBackboneInterfaceName; ///< Backbone network interface name.
+    const char               *mInterfaceName;         ///< Thread network interface name.
+    otPlatformCoprocessorUrls mCoprocessorUrls;       ///< Coprocessor URLs.
+    int                       mRealTimeSignal;        ///< The real-time signal for microsecond timer.
+    uint32_t                  mSpeedUpFactor;         ///< Speed up factor.
+    bool                      mPersistentInterface;   ///< Whether persistent the interface
+    bool                      mDryRun;                ///< If 'DryRun' is set, the posix daemon will exit
+                                                      ///< directly after initialization.
+    CoprocessorType mCoprocessorType;                 ///< The co-processor type. This field is used to pass
+                                                      ///< the type to the app layer.
 } otPlatformConfig;
+
+/**
+ * Represents the platform spinel driver structure.
+ *
+ */
+typedef struct otSpinelDriver otSpinelDriver;
+
+/**
+ * Gets the instance of the spinel driver;
+ *
+ * @note This API is used for external projects to get the instance of `SpinelDriver` to customize
+ *       different spinel handlings.
+ *
+ * @returns A pointer to the spinel driver instance.
+ *
+ */
+otSpinelDriver *otSysGetSpinelDriver(void);
+
+/**
+ * Initializes the co-processor and the spinel driver.
+ *
+ * @note This API will initialize the co-processor by resetting it and return the co-processor type.
+ *       If this API is called, the upcoming call of `otSysInit` won't initialize the co-processor
+ *       and the spinel driver again, unless `otSysDeinit` is called. This API is used to get the
+ *       co-processor type without calling `otSysInit`.
+ *
+ * @param[in]  aUrls  The URLs to initialize the co-processor.
+ *
+ * @returns The co-processor type.
+ *
+ */
+CoprocessorType otSysInitCoprocessor(otPlatformCoprocessorUrls *aUrls);
 
 /**
  * Performs all platform-specific initialization of OpenThread's drivers and initializes the OpenThread

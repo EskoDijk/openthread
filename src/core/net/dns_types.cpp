@@ -36,6 +36,7 @@
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
 #include "common/num_utils.hpp"
+#include "common/numeric_limits.hpp"
 #include "common/random.hpp"
 #include "common/string.hpp"
 #include "instance/instance.hpp"
@@ -611,8 +612,9 @@ Error Name::LabelIterator::GetNextLabel(void)
             // `mMessage.GetOffset()` must point to the start of the
             // DNS header.
             nextLabelOffset = mMessage.GetOffset() + (BigEndian::HostSwap16(pointerValue) & kPointerLabelOffsetMask);
-            VerifyOrExit(nextLabelOffset < mNextLabelOffset, error = kErrorParse);
+            VerifyOrExit(nextLabelOffset < mMinLabelOffset, error = kErrorParse);
             mNextLabelOffset = nextLabelOffset;
+            mMinLabelOffset  = nextLabelOffset;
 
             // Go back through the `while(true)` loop to get the next label.
         }
@@ -731,7 +733,11 @@ Error Name::ExtractLabels(const char *aName, const char *aSuffixName, char *aLab
     nameLength -= (suffixLength + 1);
     VerifyOrExit(nameLength < aLabelsSize, error = kErrorNoBufs);
 
-    memcpy(aLabels, aName, nameLength);
+    if (aLabels != aName)
+    {
+        memmove(aLabels, aName, nameLength);
+    }
+
     aLabels[nameLength] = kNullChar;
     error               = kErrorNone;
 
@@ -1341,6 +1347,36 @@ bool TxtRecord::VerifyTxtData(const uint8_t *aTxtData, uint16_t aTxtLength, bool
 
 exit:
     return valid;
+}
+
+void NsecRecord::TypeBitMap::AddType(uint16_t aType)
+{
+    if ((aType >> 8) == mBlockNumber)
+    {
+        uint8_t  type  = static_cast<uint8_t>(aType & 0xff);
+        uint8_t  index = (type / kBitsPerByte);
+        uint16_t mask  = (0x80 >> (type % kBitsPerByte));
+
+        mBitmaps[index] |= mask;
+        mBitmapLength = Max<uint8_t>(mBitmapLength, index + 1);
+    }
+}
+
+bool NsecRecord::TypeBitMap::ContainsType(uint16_t aType) const
+{
+    bool     contains = false;
+    uint8_t  type     = static_cast<uint8_t>(aType & 0xff);
+    uint8_t  index    = (type / kBitsPerByte);
+    uint16_t mask     = (0x80 >> (type % kBitsPerByte));
+
+    VerifyOrExit((aType >> 8) == mBlockNumber);
+
+    VerifyOrExit(index < mBitmapLength);
+
+    contains = (mBitmaps[index] & mask);
+
+exit:
+    return contains;
 }
 
 } // namespace Dns

@@ -339,7 +339,7 @@ int Leader::CompareRouteEntries(int8_t   aFirstPreference,
 
     // If all the same, prefer the BR acting as a router over an
     // end device.
-    result = ThreeWayCompare(Mle::IsActiveRouter(aFirstRloc), Mle::IsActiveRouter(aSecondRloc));
+    result = ThreeWayCompare(Mle::IsRouterRloc16(aFirstRloc), Mle::IsRouterRloc16(aSecondRloc));
 #endif
 
 exit:
@@ -606,6 +606,41 @@ void Leader::SignalNetDataChanged(void)
     mMaxLength = Max(mMaxLength, GetLength());
     Get<ot::Notifier>().Signal(kEventThreadNetdataChanged);
 }
+
+#if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+
+bool Leader::ContainsOmrPrefix(const Ip6::Prefix &aPrefix) const
+{
+    bool                   contains = false;
+    const PrefixTlv       *prefixTlv;
+    const BorderRouterTlv *brSubTlv;
+
+    VerifyOrExit(BorderRouter::RoutingManager::IsValidOmrPrefix(aPrefix));
+
+    prefixTlv = FindPrefix(aPrefix);
+    VerifyOrExit(prefixTlv != nullptr);
+
+    brSubTlv = prefixTlv->FindSubTlv<BorderRouterTlv>(/* aStable */ true);
+
+    VerifyOrExit(brSubTlv != nullptr);
+
+    for (const BorderRouterEntry *entry = brSubTlv->GetFirstEntry(); entry <= brSubTlv->GetLastEntry(); entry++)
+    {
+        OnMeshPrefixConfig config;
+
+        config.SetFrom(*prefixTlv, *brSubTlv, *entry);
+
+        if (BorderRouter::RoutingManager::IsValidOmrPrefix(config))
+        {
+            ExitNow(contains = true);
+        }
+    }
+
+exit:
+    return contains;
+}
+
+#endif // OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
 
 } // namespace NetworkData
 } // namespace ot

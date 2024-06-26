@@ -33,11 +33,13 @@
 
 #include <openthread/config.h>
 #include <openthread/platform/alarm-milli.h>
+#include <openthread/platform/diag.h>
 #include <openthread/platform/dns.h>
 #include <openthread/platform/dnssd.h>
 #include <openthread/platform/dso_transport.h>
 #include <openthread/platform/entropy.h>
 #include <openthread/platform/logging.h>
+#include <openthread/platform/mdns_socket.h>
 #include <openthread/platform/misc.h>
 #include <openthread/platform/multipan.h>
 #include <openthread/platform/radio.h>

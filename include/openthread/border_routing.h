@@ -85,7 +85,9 @@ typedef struct otBorderRoutingPrefixTableIterator
 {
     const void *mPtr1;
     const void *mPtr2;
-    uint32_t    mData32;
+    uint32_t    mData1;
+    uint8_t     mData2;
+    uint8_t     mData3;
 } otBorderRoutingPrefixTableIterator;
 
 /**
@@ -95,9 +97,12 @@ typedef struct otBorderRoutingPrefixTableIterator
 typedef struct otBorderRoutingRouterEntry
 {
     otIp6Address mAddress;                      ///< IPv6 address of the router.
+    uint32_t     mMsecSinceLastUpdate;          ///< Milliseconds since last update (any message rx) from this router.
     bool         mManagedAddressConfigFlag : 1; ///< The router's Managed Address Config flag (`M` flag).
     bool         mOtherConfigFlag : 1;          ///< The router's Other Config flag (`O` flag).
     bool         mStubRouterFlag : 1;           ///< The router's Stub Router flag.
+    bool         mIsLocalDevice : 1;            ///< This router is the local device (this BR).
+    bool         mIsReachable : 1;              ///< This router is reachable.
 } otBorderRoutingRouterEntry;
 
 /**
@@ -497,6 +502,31 @@ void otBorderRoutingDhcp6PdSetEnabled(otInstance *aInstance, bool aEnabled);
  *
  */
 otBorderRoutingDhcp6PdState otBorderRoutingDhcp6PdGetState(otInstance *aInstance);
+
+/**
+ * When the state of a DHCPv6 Prefix Delegation (PD) on the Thread interface changes, this callback notifies processes
+ * in the OS of this changed state.
+ *
+ * @param[in] aState    The state of DHCPv6 Prefix Delegation State.
+ * @param[in] aContext  A pointer to arbitrary context information.
+ *
+ */
+typedef void (*otBorderRoutingRequestDhcp6PdCallback)(otBorderRoutingDhcp6PdState aState, void *aContext);
+
+/**
+ * Sets the callback whenever the DHCPv6 PD state changes on the Thread interface.
+ *
+ * Subsequent calls to this function replace the previously set callback.
+ *
+ * @param[in] aInstance  A pointer to an OpenThread instance.
+ * @param[in] aCallback  A pointer to a function that is called whenever the DHCPv6 PD state changes.
+ * @param[in] aContext   A pointer to arbitrary context information.
+ *
+ *
+ */
+void otBorderRoutingDhcp6PdSetRequestCallback(otInstance                           *aInstance,
+                                              otBorderRoutingRequestDhcp6PdCallback aCallback,
+                                              void                                 *aContext);
 
 /**
  * @}

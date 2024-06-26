@@ -344,17 +344,15 @@ void MlrManager::HandleRegisterResponse(otMessage *aMessage, const otMessageInfo
 {
     OT_UNUSED_VARIABLE(aMessageInfo);
 
-    uint8_t               status;
-    Error                 error;
-    AddressArray          failedAddresses;
-    Callback<MlrCallback> callbackCopy = mRegisterCallback;
+    uint8_t      status;
+    Error        error;
+    AddressArray failedAddresses;
 
     mRegisterPending = false;
-    mRegisterCallback.Clear();
 
     error = ParseMlrResponse(aResult, AsCoapMessagePtr(aMessage), status, failedAddresses);
 
-    callbackCopy.InvokeIfSet(error, status, failedAddresses.GetArrayBuffer(), failedAddresses.GetLength());
+    mRegisterCallback.InvokeAndClearIfSet(error, status, failedAddresses.GetArrayBuffer(), failedAddresses.GetLength());
 }
 
 #endif // OPENTHREAD_FTD && OPENTHREAD_CONFIG_TMF_PROXY_MLR_ENABLE && OPENTHREAD_CONFIG_COMMISSIONER_ENABLE
@@ -403,7 +401,7 @@ Error MlrManager::SendMlrMessage(const Ip6::Address   *aAddresses,
         uint8_t pbbrServiceId;
 
         SuccessOrExit(error = Get<BackboneRouter::Leader>().GetServiceId(pbbrServiceId));
-        SuccessOrExit(error = mle.GetServiceAloc(pbbrServiceId, messageInfo.GetPeerAddr()));
+        mle.GetServiceAloc(pbbrServiceId, messageInfo.GetPeerAddr());
     }
     else
     {

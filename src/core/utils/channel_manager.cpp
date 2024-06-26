@@ -162,8 +162,8 @@ void ChannelManager::StartDatasetUpdate(void)
     MeshCoP::Dataset::Info dataset;
 
     dataset.Clear();
-    dataset.SetChannel(mChannel);
-    dataset.SetDelay(Time::SecToMsec(mDelay));
+    dataset.Set<MeshCoP::Dataset::kChannel>(mChannel);
+    dataset.Set<MeshCoP::Dataset::kDelay>(Time::SecToMsec(mDelay));
 
     switch (Get<MeshCoP::DatasetUpdater>().RequestUpdate(dataset, HandleDatasetUpdateDone, this))
     {
@@ -216,8 +216,10 @@ void ChannelManager::HandleTimer(void)
     switch (mState)
     {
     case kStateIdle:
+#if OPENTHREAD_CONFIG_CHANNEL_MONITOR_ENABLE
         LogInfo("Auto-triggered channel select");
         IgnoreError(RequestAutoChannelSelect(false));
+#endif
         StartAutoSelectTimer();
         break;
 
@@ -387,14 +389,11 @@ Error ChannelManager::RequestChannelSelect(bool aSkipQualityCheck)
         LogInfo("Occupancy rate diff too small to change channel");
         ExitNow(error = kErrorAbort);
     }
+
     mChannelSelected = newChannel;
+
 exit:
-
-    if (error != kErrorNone)
-    {
-        LogInfo("Request to select better channel failed, error: %s", ErrorToString(error));
-    }
-
+    LogWarnOnError(error, "select better channel");
     return error;
 }
 #endif // OPENTHREAD_CONFIG_CHANNEL_MONITOR_ENABLE
@@ -426,12 +425,14 @@ exit:
 #if OPENTHREAD_FTD
 void ChannelManager::SetAutoNetworkChannelSelectionEnabled(bool aEnabled)
 {
+#if OPENTHREAD_CONFIG_CHANNEL_MONITOR_ENABLE
     if (aEnabled != mAutoSelectEnabled)
     {
         mAutoSelectEnabled = aEnabled;
         IgnoreError(RequestNetworkChannelSelect(false));
         StartAutoSelectTimer();
     }
+#endif
 }
 #endif
 

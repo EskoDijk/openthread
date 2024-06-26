@@ -1028,6 +1028,9 @@ public:
      * Both @p aName and @p aSuffixName MUST follow the same style regarding inclusion of trailing dot ('.'). Otherwise
      * `kErrorParse` is returned.
      *
+     * The @p aLabels buffer may be the same as @p aName for in-place label extraction. In this case, the
+     * implementation avoids unnecessary character copies.
+     *
      * @param[in]   aName           The name to extract labels from.
      * @param[in]   aSuffixName     The suffix name (e.g., can be domain name).
      * @param[out]  aLabels         Pointer to buffer to copy the extracted labels.
@@ -1047,6 +1050,9 @@ public:
      * Both @p aName and @p aSuffixName MUST follow the same style regarding inclusion of trailing dot ('.'). Otherwise
      * `kErrorParse` is returned.
      *
+     * The @p aLabels buffer may be the same as @p aName for in-place label extraction. In this case, the
+     * implementation avoids unnecessary character copies.
+     *
      * @tparam      kLabelsBufferSize   Size of the buffer string.
      *
      * @param[in]   aName           The name to extract labels from.
@@ -1062,6 +1068,28 @@ public:
     static Error ExtractLabels(const char *aName, const char *aSuffixName, char (&aLabels)[kLabelsBufferSize])
     {
         return ExtractLabels(aName, aSuffixName, aLabels, kLabelsBufferSize);
+    }
+
+    /**
+     * Strips a given suffix name (e.g., a domain name) from a given DNS name string, updating it in place.
+     *
+     * First checks that @p Name ends with the given @p aSuffixName, otherwise `kErrorParse` is returned.
+     *
+     * Both @p aName and @p aSuffixName MUST follow the same style regarding inclusion of trailing dot ('.'). Otherwise
+     * `kErrorParse` is returned.
+     *
+     * @tparam kNameBufferSize     The size of name buffer.
+     *
+     * @param[in]  aName           The name buffer to strip the @p aSuffixName from.
+     * @param[in]  aSuffixName     The suffix name (e.g., can be domain name).
+     *
+     * @retval kErrorNone          Successfully stripped the suffix name from @p aName.
+     * @retval kErrorParse         @p aName does not contain @p aSuffixName.
+     *
+     */
+    template <uint16_t kNameBufferSize> static Error StripName(char (&aName)[kNameBufferSize], const char *aSuffixName)
+    {
+        return ExtractLabels(aName, aSuffixName, aName, kNameBufferSize);
     }
 
     /**
@@ -1117,6 +1145,7 @@ private:
             : mMessage(aMessage)
             , mNextLabelOffset(aLabelOffset)
             , mNameEndOffset(kUnsetNameEndOffset)
+            , mMinLabelOffset(aLabelOffset)
         {
         }
 
@@ -1134,6 +1163,7 @@ private:
         uint8_t        mLabelLength;      // Length of current label (number of chars).
         uint16_t       mNextLabelOffset;  // Offset in `mMessage` to the start of the next label.
         uint16_t       mNameEndOffset;    // Offset in `mMessage` to the byte after the end of domain name field.
+        uint16_t       mMinLabelOffset;   // Offset in `mMessage` to the start of the earliest parsed label.
     };
 
     Name(const char *aString, const Message *aMessage, uint16_t aOffset)
@@ -1336,6 +1366,7 @@ public:
     static constexpr uint16_t kTypeAaaa  = 28;  ///< IPv6 address record.
     static constexpr uint16_t kTypeSrv   = 33;  ///< SRV locator record.
     static constexpr uint16_t kTypeOpt   = 41;  ///< Option record.
+    static constexpr uint16_t kTypeNsec  = 47;  ///< NSEC record.
     static constexpr uint16_t kTypeAny   = 255; ///< ANY record.
 
     // Resource Record Class Codes.
@@ -2743,6 +2774,104 @@ private:
 
     uint32_t mLeaseInterval;
     uint32_t mKeyLeaseInterval;
+} OT_TOOL_PACKED_END;
+
+/**
+ * Implements body format of NSEC record (RFC 3845) for use with mDNS.
+ *
+ */
+OT_TOOL_PACKED_BEGIN
+class NsecRecord : public ResourceRecord
+{
+public:
+    static constexpr uint16_t kType = kTypeNsec; ///< The NSEC record type.
+
+    /**
+     * Represents NSEC Type Bit Map field (RFC 3845 - section 2.1.2)
+     *
+     */
+    OT_TOOL_PACKED_BEGIN
+    class TypeBitMap : public Clearable<TypeBitMap>
+    {
+    public:
+        static constexpr uint8_t kMinSize = 2; ///< Minimum size of a valid `TypeBitMap` (with zero length).
+
+        static constexpr uint8_t kMaxLength = 32; ///< Maximum BitmapLength value.
+
+        /**
+         * Gets the Window Block Number
+         *
+         * @returns The Window Block Number.
+         *
+         */
+        uint8_t GetBlockNumber(void) const { return mBlockNumber; }
+
+        /**
+         * Sets the Window Block Number
+         *
+         * @param[in] aBlockNumber The Window Block Number.
+         *
+         */
+        void SetBlockNumber(uint8_t aBlockNumber) { mBlockNumber = aBlockNumber; }
+
+        /**
+         * Gets the Bitmap length
+         *
+         * @returns The Bitmap length
+         *
+         */
+        uint8_t GetBitmapLength(void) { return mBitmapLength; }
+
+        /**
+         * Gets the total size (number of bytes) of the `TypeBitMap` field.
+         *
+         * @returns The size of the `TypeBitMap`
+         *
+         */
+        uint16_t GetSize(void) const { return (sizeof(mBlockNumber) + sizeof(mBitmapLength) + mBitmapLength); }
+
+        /**
+         * Adds a resource record type to the Bitmap.
+         *
+         * As the types are added to the Bitmap the Bitmap length gets updated accordingly.
+         *
+         * The type space is split into 256 window blocks, each representing the low-order 8 bits of the 16-bit type
+         * value. If @p aType does not match the currently set Window Block Number, no action is performed.
+         *
+         * @param[in] aType   The resource record type to add.
+         *
+         */
+        void AddType(uint16_t aType);
+
+        /**
+         * Indicates whether a given resource record type is present in the Bitmap.
+         *
+         * If @p aType does not match the currently set Window Block Number, this method returns `false`..
+         *
+         * @param[in] aType   The resource record type to check.
+         *
+         * @retval TRUE   The @p aType is present in the Bitmap.
+         * @retval FALSE  The @p aType is not present in the Bitmap.
+         *
+         */
+        bool ContainsType(uint16_t aType) const;
+
+    private:
+        uint8_t mBlockNumber;
+        uint8_t mBitmapLength;
+        uint8_t mBitmaps[kMaxLength];
+    } OT_TOOL_PACKED_END;
+
+    /**
+     * Initializes the NSEC Resource Record by setting its type and class.
+     *
+     * Other record fields (TTL, length remain unchanged/uninitialized.
+     *
+     * @param[in] aClass  The class of the resource record (default is `kClassInternet`).
+     *
+     */
+    void Init(uint16_t aClass = kClassInternet) { ResourceRecord::Init(kTypeNsec, aClass); }
+
 } OT_TOOL_PACKED_END;
 
 /**

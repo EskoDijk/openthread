@@ -86,12 +86,12 @@ static Dns::UpdateHeader::Response ErrorToDnsResponseCode(Error aError)
 
 Server::Server(Instance &aInstance)
     : InstanceLocator(aInstance)
-    , mSocket(aInstance)
+    , mSocket(aInstance, *this)
     , mLeaseTimer(aInstance)
     , mOutstandingUpdatesTimer(aInstance)
     , mCompletedUpdateTask(aInstance)
     , mServiceUpdateId(Random::NonCrypto::GetUint32())
-    , mPort(kUdpPortMin)
+    , mPort(kUninitializedPort)
     , mState(kStateDisabled)
     , mAddressMode(kDefaultAddressMode)
     , mAnycastSequenceNumber(0)
@@ -595,7 +595,7 @@ exit:
     }
 }
 
-void Server::SelectPort(void)
+void Server::InitPort(void)
 {
     mPort = kUdpPortMin;
 
@@ -605,24 +605,35 @@ void Server::SelectPort(void)
 
         if (Get<Settings>().Read(info) == kErrorNone)
         {
-            mPort = info.GetPort() + 1;
-            if (mPort < kUdpPortMin || mPort > kUdpPortMax)
-            {
-                mPort = kUdpPortMin;
-            }
+            mPort = info.GetPort();
         }
     }
 #endif
+}
+
+void Server::SelectPort(void)
+{
+    if (mPort == kUninitializedPort)
+    {
+        InitPort();
+    }
+    ++mPort;
+    if (mPort < kUdpPortMin || mPort > kUdpPortMax)
+    {
+        mPort = kUdpPortMin;
+    }
 
     LogInfo("Selected port %u", mPort);
 }
 
 void Server::Start(void)
 {
+    Error error = kErrorNone;
+
     VerifyOrExit(mState == kStateStopped);
 
     mState = kStateRunning;
-    PrepareSocket();
+    SuccessOrExit(error = PrepareSocket());
     LogInfo("Start listening on port %u", mPort);
 
 #if OPENTHREAD_CONFIG_SRP_SERVER_ADVERTISING_PROXY_ENABLE
@@ -630,10 +641,15 @@ void Server::Start(void)
 #endif
 
 exit:
-    return;
+    // Re-enable server to select a new port.
+    if (error != kErrorNone)
+    {
+        Disable();
+        Enable();
+    }
 }
 
-void Server::PrepareSocket(void)
+Error Server::PrepareSocket(void)
 {
     Error error = kErrorNone;
 
@@ -652,15 +668,18 @@ void Server::PrepareSocket(void)
 #endif
 
     VerifyOrExit(!mSocket.IsOpen());
-    SuccessOrExit(error = mSocket.Open(HandleUdpReceive, this));
+    SuccessOrExit(error = mSocket.Open());
     error = mSocket.Bind(mPort, Ip6::kNetifThread);
 
 exit:
     if (error != kErrorNone)
     {
-        LogCrit("Failed to prepare socket: %s", ErrorToString(error));
+        LogWarnOnError(error, "prepare socket");
+        IgnoreError(mSocket.Close());
         Stop();
     }
+
+    return error;
 }
 
 Ip6::Udp::Socket &Server::GetSocket(void)
@@ -689,7 +708,7 @@ void Server::HandleDnssdServerStateChange(void)
 
     if (mState == kStateRunning)
     {
-        PrepareSocket();
+        IgnoreError(PrepareSocket());
     }
 }
 
@@ -853,11 +872,7 @@ Error Server::ProcessZoneSection(const Message &aMessage, MessageMetadata &aMeta
     aMetadata.mOffset = offset;
 
 exit:
-    if (error != kErrorNone)
-    {
-        LogWarn("Failed to process DNS Zone section: %s", ErrorToString(error));
-    }
-
+    LogWarnOnError(error, "process DNS Zone section");
     return error;
 }
 
@@ -883,11 +898,7 @@ Error Server::ProcessUpdateSection(Host &aHost, const Message &aMessage, Message
     VerifyOrExit(!HasNameConflictsWith(aHost), error = kErrorDuplicated);
 
 exit:
-    if (error != kErrorNone)
-    {
-        LogWarn("Failed to process DNS Update section: %s", ErrorToString(error));
-    }
-
+    LogWarnOnError(error, "Process DNS Update section");
     return error;
 }
 
@@ -976,11 +987,7 @@ Error Server::ProcessHostDescriptionInstruction(Host                  &aHost,
     // the host is being removed or registered.
 
 exit:
-    if (error != kErrorNone)
-    {
-        LogWarn("Failed to process Host Description instructions: %s", ErrorToString(error));
-    }
-
+    LogWarnOnError(error, "process Host Description instructions");
     return error;
 }
 
@@ -1099,11 +1106,7 @@ Error Server::ProcessServiceDiscoveryInstructions(Host                  &aHost,
     }
 
 exit:
-    if (error != kErrorNone)
-    {
-        LogWarn("Failed to process Service Discovery instructions: %s", ErrorToString(error));
-    }
-
+    LogWarnOnError(error, "process Service Discovery instructions");
     return error;
 }
 
@@ -1202,11 +1205,7 @@ Error Server::ProcessServiceDescriptionInstructions(Host            &aHost,
     aMetadata.mOffset = offset;
 
 exit:
-    if (error != kErrorNone)
-    {
-        LogWarn("Failed to process Service Description instructions: %s", ErrorToString(error));
-    }
-
+    LogWarnOnError(error, "process Service Description instructions");
     return error;
 }
 
@@ -1295,11 +1294,7 @@ Error Server::ProcessAdditionalSection(Host *aHost, const Message &aMessage, Mes
     aMetadata.mOffset = offset;
 
 exit:
-    if (error != kErrorNone)
-    {
-        LogWarn("Failed to process DNS Additional section: %s", ErrorToString(error));
-    }
-
+    LogWarnOnError(error, "process DNS Additional section");
     return error;
 }
 
@@ -1346,11 +1341,7 @@ Error Server::VerifySignature(const Host::Key  &aKey,
     error = aKey.Verify(hash, signature);
 
 exit:
-    if (error != kErrorNone)
-    {
-        LogWarn("Failed to verify message signature: %s", ErrorToString(error));
-    }
-
+    LogWarnOnError(error, "verify message signature");
     FreeMessage(signerNameMessage);
     return error;
 }
@@ -1510,11 +1501,8 @@ void Server::SendResponse(const Dns::UpdateHeader    &aHeader,
     UpdateResponseCounters(aResponseCode);
 
 exit:
-    if (error != kErrorNone)
-    {
-        LogWarn("Failed to send response: %s", ErrorToString(error));
-        FreeMessage(response);
-    }
+    LogWarnOnError(error, "send response");
+    FreeMessageOnError(response, error);
 }
 
 void Server::SendResponse(const Dns::UpdateHeader &aHeader,
@@ -1569,26 +1557,16 @@ void Server::SendResponse(const Dns::UpdateHeader &aHeader,
     UpdateResponseCounters(Dns::UpdateHeader::kResponseSuccess);
 
 exit:
-    if (error != kErrorNone)
-    {
-        LogWarn("Failed to send response: %s", ErrorToString(error));
-        FreeMessage(response);
-    }
-}
-
-void Server::HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
-{
-    static_cast<Server *>(aContext)->HandleUdpReceive(AsCoreType(aMessage), AsCoreType(aMessageInfo));
+    LogWarnOnError(error, "send response");
+    FreeMessageOnError(response, error);
 }
 
 void Server::HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
     Error error = ProcessMessage(aMessage, aMessageInfo);
 
-    if (error != kErrorNone)
-    {
-        LogInfo("Failed to handle DNS message: %s", ErrorToString(error));
-    }
+    LogWarnOnError(error, "handle DNS message");
+    OT_UNUSED_VARIABLE(error);
 }
 
 Error Server::ProcessMessage(Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
@@ -1625,15 +1603,14 @@ exit:
 
 void Server::HandleLeaseTimer(void)
 {
-    TimeMilli now                = TimerMilli::GetNow();
-    TimeMilli earliestExpireTime = now.GetDistantFuture();
-    Host     *nextHost;
+    NextFireTime nextExpireTime;
+    Host        *nextHost;
 
     for (Host *host = mHosts.GetHead(); host != nullptr; host = nextHost)
     {
         nextHost = host->GetNext();
 
-        if (host->GetKeyExpireTime() <= now)
+        if (host->GetKeyExpireTime() <= nextExpireTime.GetNow())
         {
             LogInfo("KEY LEASE of host %s expired", host->GetFullName());
 
@@ -1646,7 +1623,7 @@ void Server::HandleLeaseTimer(void)
 
             Service *next;
 
-            earliestExpireTime = Min(earliestExpireTime, host->GetKeyExpireTime());
+            nextExpireTime.UpdateIfEarlier(host->GetKeyExpireTime());
 
             // Check if any service instance name expired.
             for (Service *service = host->mServices.GetHead(); service != nullptr; service = next)
@@ -1655,18 +1632,18 @@ void Server::HandleLeaseTimer(void)
 
                 OT_ASSERT(service->mIsDeleted);
 
-                if (service->GetKeyExpireTime() <= now)
+                if (service->GetKeyExpireTime() <= nextExpireTime.GetNow())
                 {
                     service->Log(Service::kKeyLeaseExpired);
                     host->RemoveService(service, kDeleteName, kNotifyServiceHandler);
                 }
                 else
                 {
-                    earliestExpireTime = Min(earliestExpireTime, service->GetKeyExpireTime());
+                    nextExpireTime.UpdateIfEarlier(service->GetKeyExpireTime());
                 }
             }
         }
-        else if (host->GetExpireTime() <= now)
+        else if (host->GetExpireTime() <= nextExpireTime.GetNow())
         {
             LogInfo("LEASE of host %s expired", host->GetFullName());
 
@@ -1679,7 +1656,7 @@ void Server::HandleLeaseTimer(void)
 
             RemoveHost(host, kRetainName);
 
-            earliestExpireTime = Min(earliestExpireTime, host->GetKeyExpireTime());
+            nextExpireTime.UpdateIfEarlier(host->GetKeyExpireTime());
         }
         else
         {
@@ -1689,13 +1666,13 @@ void Server::HandleLeaseTimer(void)
 
             OT_ASSERT(!host->IsDeleted());
 
-            earliestExpireTime = Min(earliestExpireTime, host->GetExpireTime());
+            nextExpireTime.UpdateIfEarlier(host->GetExpireTime());
 
             for (Service *service = host->mServices.GetHead(); service != nullptr; service = next)
             {
                 next = service->GetNext();
 
-                if (service->GetKeyExpireTime() <= now)
+                if (service->GetKeyExpireTime() <= nextExpireTime.GetNow())
                 {
                     service->Log(Service::kKeyLeaseExpired);
                     host->RemoveService(service, kDeleteName, kNotifyServiceHandler);
@@ -1703,38 +1680,25 @@ void Server::HandleLeaseTimer(void)
                 else if (service->mIsDeleted)
                 {
                     // The service has been deleted but the name retains.
-                    earliestExpireTime = Min(earliestExpireTime, service->GetKeyExpireTime());
+                    nextExpireTime.UpdateIfEarlier(service->GetKeyExpireTime());
                 }
-                else if (service->GetExpireTime() <= now)
+                else if (service->GetExpireTime() <= nextExpireTime.GetNow())
                 {
                     service->Log(Service::kLeaseExpired);
 
                     // The service is expired, delete it.
                     host->RemoveService(service, kRetainName, kNotifyServiceHandler);
-                    earliestExpireTime = Min(earliestExpireTime, service->GetKeyExpireTime());
+                    nextExpireTime.UpdateIfEarlier(service->GetKeyExpireTime());
                 }
                 else
                 {
-                    earliestExpireTime = Min(earliestExpireTime, service->GetExpireTime());
+                    nextExpireTime.UpdateIfEarlier(service->GetExpireTime());
                 }
             }
         }
     }
 
-    if (earliestExpireTime != now.GetDistantFuture())
-    {
-        OT_ASSERT(earliestExpireTime >= now);
-        if (!mLeaseTimer.IsRunning() || earliestExpireTime <= mLeaseTimer.GetFireTime())
-        {
-            LogInfo("Lease timer is scheduled for %lu seconds", ToUlong(Time::MsecToSec(earliestExpireTime - now)));
-            mLeaseTimer.StartAt(earliestExpireTime, 0);
-        }
-    }
-    else
-    {
-        LogInfo("Lease timer is stopped");
-        mLeaseTimer.Stop();
-    }
+    mLeaseTimer.FireAtIfEarlier(nextExpireTime);
 }
 
 void Server::HandleOutstandingUpdatesTimer(void)
@@ -1819,7 +1783,7 @@ void Server::UpdateAddrResolverCacheTable(const Ip6::MessageInfo &aMessageInfo, 
 
     rloc16 = Get<AddressResolver>().LookUp(aMessageInfo.GetPeerAddr());
 
-    VerifyOrExit(rloc16 != Mac::kShortAddrInvalid);
+    VerifyOrExit(rloc16 != Mle::kInvalidRloc16);
 
     for (const Ip6::Address &address : aHost.mAddresses)
     {

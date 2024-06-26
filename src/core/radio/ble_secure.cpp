@@ -64,7 +64,9 @@ BleSecure::BleSecure(Instance &aInstance)
 
 Error BleSecure::Start(ConnectCallback aConnectHandler, ReceiveCallback aReceiveHandler, bool aTlvMode, void *aContext)
 {
-    Error error = kErrorNone;
+    Error    error             = kErrorNone;
+    uint16_t advertisementLen  = 0;
+    uint8_t *advertisementData = nullptr;
 
     VerifyOrExit(mBleState == kStopped, error = kErrorAlready);
 
@@ -74,7 +76,13 @@ Error BleSecure::Start(ConnectCallback aConnectHandler, ReceiveCallback aReceive
     mMtuSize = kInitialMtuSize;
 
     SuccessOrExit(error = otPlatBleEnable(&GetInstance()));
+
+    SuccessOrExit(error = otPlatBleGetAdvertisementBuffer(&GetInstance(), &advertisementData));
+    SuccessOrExit(error = mTcatAgent.GetAdvertisementData(advertisementLen, advertisementData));
+    VerifyOrExit(advertisementData != nullptr, error = kErrorFailed);
+    SuccessOrExit(error = otPlatBleGapAdvSetData(&GetInstance(), advertisementData, advertisementLen));
     SuccessOrExit(error = otPlatBleGapAdvStart(&GetInstance(), OT_BLE_ADV_INTERVAL_DEFAULT));
+
     SuccessOrExit(error = mTls.Open(&BleSecure::HandleTlsReceive, &BleSecure::HandleTlsConnected, this));
     SuccessOrExit(error = mTls.Bind(HandleTransport, this));
 
@@ -86,14 +94,13 @@ exit:
     return error;
 }
 
-Error BleSecure::TcatStart(const MeshCoP::TcatAgent::VendorInfo &aVendorInfo,
-                           MeshCoP::TcatAgent::JoinCallback      aJoinHandler)
+Error BleSecure::TcatStart(MeshCoP::TcatAgent::JoinCallback aJoinHandler)
 {
     Error error;
 
     VerifyOrExit(mBleState != kStopped, error = kErrorInvalidState);
 
-    error = mTcatAgent.Start(aVendorInfo, mReceiveCallback.GetHandler(), aJoinHandler, mReceiveCallback.GetContext());
+    error = mTcatAgent.Start(mReceiveCallback.GetHandler(), aJoinHandler, mReceiveCallback.GetContext());
 
 exit:
     return error;
@@ -330,7 +337,14 @@ void BleSecure::HandleTlsConnected(bool aConnected)
 
         if (mTcatAgent.IsEnabled())
         {
-            IgnoreReturnValue(mTcatAgent.Connected(mTls));
+            Error err = mTcatAgent.Connected(mTls);
+
+            if (err != kErrorNone)
+            {
+                mTls.Close();
+                LogWarn("Rejected TCAT Commissioner, error: %s", ErrorToString(err));
+                ExitNow();
+            }
         }
     }
     else
@@ -345,6 +359,9 @@ void BleSecure::HandleTlsConnected(bool aConnected)
     }
 
     mConnectCallback.InvokeIfSet(&GetInstance(), aConnected, true);
+
+exit:
+    return;
 }
 
 void BleSecure::HandleTlsReceive(void *aContext, uint8_t *aBuf, uint16_t aLength)

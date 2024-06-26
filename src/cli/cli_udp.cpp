@@ -70,9 +70,9 @@ UdpExample::UdpExample(otInstance *aInstance, OutputImplementer &aOutputImplemen
  *   - `-u`: Unspecified network interface, which means that the UDP/IPv6 stack determines which
  *   network interface to bind the socket to.
  *   - `-b`: Backbone network interface is used.
- * - `ip`: IPv6 address to bind to. If you wish to have the UDP/IPv6 stack assign the binding
- *   IPv6 address, then you can use the following value to use the unspecified
- *   IPv6 address: `::`. Each example uses the unspecified IPv6 address.
+ * - `ip`: Unicast IPv6 address to bind to. If you wish to have the UDP/IPv6 stack assign the binding
+ *   IPv6 address, or if you wish to bind to multicast IPv6 addresses, then you can use the following
+ *   value to use the unspecified IPv6 address: `::`. Each example uses the unspecified IPv6 address.
  * - `port`: UDP port number to bind to. Each of the examples is using port number 1234.
  * @par
  * Assigns an IPv6 address and a port to an open socket, which binds the socket for communication.
@@ -134,7 +134,7 @@ template <> otError UdpExample::Process<Cmd("connect")>(Arg aArgs[])
     otSockAddr sockaddr;
     bool       nat64Synth;
 
-    SuccessOrExit(error = Interpreter::ParseToIp6Address(GetInstancePtr(), aArgs[0], sockaddr.mAddress, nat64Synth));
+    SuccessOrExit(error = ParseToIp6Address(GetInstancePtr(), aArgs[0], sockaddr.mAddress, nat64Synth));
 
     if (nat64Synth)
     {
@@ -256,6 +256,8 @@ template <> otError UdpExample::Process<Cmd("send")>(Arg aArgs[])
     otMessageInfo     messageInfo;
     otMessageSettings messageSettings = {mLinkSecurityEnabled, OT_MESSAGE_PRIORITY_NORMAL};
 
+    VerifyOrExit(otUdpIsOpen(GetInstancePtr(), &mSocket), error = OT_ERROR_INVALID_STATE);
+
     ClearAllBytes(messageInfo);
 
     // Possible argument formats:
@@ -269,8 +271,7 @@ template <> otError UdpExample::Process<Cmd("send")>(Arg aArgs[])
     {
         bool nat64Synth;
 
-        SuccessOrExit(
-            error = Interpreter::ParseToIp6Address(GetInstancePtr(), aArgs[0], messageInfo.mPeerAddr, nat64Synth));
+        SuccessOrExit(error = ParseToIp6Address(GetInstancePtr(), aArgs[0], messageInfo.mPeerAddr, nat64Synth));
 
         if (nat64Synth)
         {
@@ -360,7 +361,7 @@ template <> otError UdpExample::Process<Cmd("linksecurity")>(Arg aArgs[])
      */
     else
     {
-        error = Interpreter::ParseEnableOrDisable(aArgs[0], mLinkSecurityEnabled);
+        error = ParseEnableOrDisable(aArgs[0], mLinkSecurityEnabled);
     }
 
     return error;

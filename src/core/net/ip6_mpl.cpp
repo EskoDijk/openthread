@@ -76,7 +76,7 @@ void MplOption::Init(SeedIdLength aSeedIdLength)
 
 void Mpl::InitOption(MplOption &aOption, const Address &aAddress)
 {
-    if (aAddress == Get<Mle::Mle>().GetMeshLocal16())
+    if (aAddress == Get<Mle::Mle>().GetMeshLocalRloc())
     {
         // Seed ID can be elided when `aAddress` is RLOC.
         aOption.Init(MplOption::kSeedIdLength0);
@@ -383,8 +383,7 @@ exit:
 
 void Mpl::HandleRetransmissionTimer(void)
 {
-    TimeMilli now      = TimerMilli::GetNow();
-    TimeMilli nextTime = now.GetDistantFuture();
+    NextFireTime nextTime;
 
     for (Message &message : mBufferedMessageSet)
     {
@@ -394,9 +393,9 @@ void Mpl::HandleRetransmissionTimer(void)
 
         metadata.ReadFrom(message);
 
-        if (now < metadata.mTransmissionTime)
+        if (nextTime.GetNow() < metadata.mTransmissionTime)
         {
-            nextTime = Min(nextTime, metadata.mTransmissionTime);
+            nextTime.UpdateIfEarlier(metadata.mTransmissionTime);
             continue;
         }
 
@@ -417,10 +416,10 @@ void Mpl::HandleRetransmissionTimer(void)
 
         if (metadata.mTransmissionCount < maxRetx)
         {
-            metadata.GenerateNextTransmissionTime(now, kDataMessageInterval);
+            metadata.GenerateNextTransmissionTime(nextTime.GetNow(), kDataMessageInterval);
             metadata.UpdateIn(message);
 
-            nextTime = Min(nextTime, metadata.mTransmissionTime);
+            nextTime.UpdateIfEarlier(metadata.mTransmissionTime);
 
             messageCopy = message.Clone();
         }
@@ -451,10 +450,7 @@ void Mpl::HandleRetransmissionTimer(void)
         }
     }
 
-    if (nextTime < now.GetDistantFuture())
-    {
-        mRetransmissionTimer.FireAt(nextTime);
-    }
+    mRetransmissionTimer.FireAt(nextTime);
 }
 
 void Mpl::Metadata::ReadFrom(const Message &aMessage)
@@ -465,10 +461,7 @@ void Mpl::Metadata::ReadFrom(const Message &aMessage)
     IgnoreError(aMessage.Read(length - sizeof(*this), *this));
 }
 
-void Mpl::Metadata::RemoveFrom(Message &aMessage) const
-{
-    SuccessOrAssert(aMessage.SetLength(aMessage.GetLength() - sizeof(*this)));
-}
+void Mpl::Metadata::RemoveFrom(Message &aMessage) const { aMessage.RemoveFooter(sizeof(*this)); }
 
 void Mpl::Metadata::UpdateIn(Message &aMessage) const { aMessage.Write(aMessage.GetLength() - sizeof(*this), *this); }
 

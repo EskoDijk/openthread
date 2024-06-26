@@ -193,9 +193,13 @@ if [ "$TORANJ_CLI" = 1 ]; then
     run cli/test-026-coaps-conn-limit.py
     run cli/test-027-slaac-address.py
     run cli/test-028-border-agent-ephemeral-key.py
+    run cli/test-029-pending-dataset-key-change.py
+    run cli/test-030-anycast-forwarding.py
     run cli/test-400-srp-client-server.py
     run cli/test-401-srp-server-address-cache-snoop.py
     run cli/test-500-two-brs-two-networks.py
+    run cli/test-501-multi-br-failure-recovery.py
+    run cli/test-502-multi-br-leader-failure-recovery.py
     run cli/test-601-channel-manager-channel-change.py
     # Skip the "channel-select" test on a TREL only radio link, since it
     # requires energy scan which is not supported in this case.

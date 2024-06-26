@@ -61,12 +61,14 @@
 #include "cli/cli_bbr.hpp"
 #include "cli/cli_br.hpp"
 #include "cli/cli_commissioner.hpp"
+#include "cli/cli_config.h"
 #include "cli/cli_dataset.hpp"
 #include "cli/cli_dns.hpp"
 #include "cli/cli_history.hpp"
 #include "cli/cli_joiner.hpp"
 #include "cli/cli_link_metrics.hpp"
 #include "cli/cli_mac_filter.hpp"
+#include "cli/cli_mdns.hpp"
 #include "cli/cli_network_data.hpp"
 #include "cli/cli_ping.hpp"
 #include "cli/cli_srp_client.hpp"
@@ -117,6 +119,7 @@ class Interpreter : public OutputImplementer, public Utils
     friend class Dns;
     friend class Joiner;
     friend class LinkMetrics;
+    friend class Mdns;
     friend class NetworkData;
     friend class PingSender;
     friend class SrpClient;
@@ -188,76 +191,6 @@ public:
      */
     otError SetUserCommands(const otCliCommand *aCommands, uint8_t aLength, void *aContext);
 
-    static constexpr uint8_t kLinkModeStringSize = sizeof("rdn"); ///< Size of string buffer for a MLE Link Mode.
-
-    /**
-     * Converts a given MLE Link Mode to flag string.
-     *
-     * The characters 'r', 'd', and 'n' are respectively used for `mRxOnWhenIdle`, `mDeviceType` and `mNetworkData`
-     * flags. If all flags are `false`, then "-" is returned.
-     *
-     * @param[in]  aLinkMode       The MLE Link Mode to convert.
-     * @param[out] aStringBuffer   A reference to an string array to place the string.
-     *
-     * @returns A pointer @p aStringBuffer which contains the converted string.
-     *
-     */
-    static const char *LinkModeToString(const otLinkModeConfig &aLinkMode, char (&aStringBuffer)[kLinkModeStringSize]);
-
-    /**
-     * Converts an IPv6 address origin `OT_ADDRESS_ORIGIN_*` value to human-readable string.
-     *
-     * @param[in] aOrigin   The IPv6 address origin to convert.
-     *
-     * @returns A human-readable string representation of @p aOrigin.
-     *
-     */
-    static const char *AddressOriginToString(uint8_t aOrigin);
-
-    /**
-     * Parses a given argument string as a route preference comparing it against  "high", "med", or
-     * "low".
-     *
-     * @param[in]  aArg          The argument string to parse.
-     * @param[out] aPreference   Reference to a `otRoutePreference` to return the parsed preference.
-     *
-     * @retval OT_ERROR_NONE             Successfully parsed @p aArg and updated @p aPreference.
-     * @retval OT_ERROR_INVALID_ARG      @p aArg is not a valid preference string "high", "med", or "low".
-     *
-     */
-    static otError ParsePreference(const Arg &aArg, otRoutePreference &aPreference);
-
-    /**
-     * Converts a route preference value to human-readable string.
-     *
-     * @param[in] aPreference   The preference value to convert (`OT_ROUTE_PREFERENCE_*` values).
-     *
-     * @returns A string representation @p aPreference.
-     *
-     */
-    static const char *PreferenceToString(signed int aPreference);
-
-    /**
-     * Parses the argument as an IP address.
-     *
-     * If the argument string is an IPv4 address, this method will try to synthesize an IPv6 address using preferred
-     * NAT64 prefix in the network data.
-     *
-     * @param[in]  aInstance       A pointer to OpenThread instance.
-     * @param[in]  aArg            The argument string to parse.
-     * @param[out] aAddress        A reference to an `otIp6Address` to output the parsed IPv6 address.
-     * @param[out] aSynthesized    Whether @p aAddress is synthesized from an IPv4 address.
-     *
-     * @retval OT_ERROR_NONE           The argument was parsed successfully.
-     * @retval OT_ERROR_INVALID_ARGS   The argument is empty or does not contain a valid IP address.
-     * @retval OT_ERROR_INVALID_STATE  No valid NAT64 prefix in the network data.
-     *
-     */
-    static otError ParseToIp6Address(otInstance   *aInstance,
-                                     const Arg    &aArg,
-                                     otIp6Address &aAddress,
-                                     bool         &aSynthesized);
-
 protected:
     static Interpreter *sInterpreter;
 
@@ -277,11 +210,6 @@ private:
     void OutputPrompt(void);
     void OutputResult(otError aError);
 
-    static otError ParseJoinerDiscerner(Arg &aArg, otJoinerDiscerner &aDiscerner);
-#if OPENTHREAD_CONFIG_BORDER_ROUTER_ENABLE
-    static otError ParsePrefix(Arg aArgs[], otBorderRouterConfig &aConfig);
-    static otError ParseRoute(Arg aArgs[], otExternalRouteConfig &aConfig);
-#endif
 #if OPENTHREAD_CONFIG_IP6_BR_COUNTERS_ENABLE
     void OutputBorderRouterCounters(void);
 #endif
@@ -411,6 +339,11 @@ private:
 
 #endif // OPENTHREAD_FTD || OPENTHREAD_MTD
 
+#if OPENTHREAD_CONFIG_DIAG_ENABLE
+    static void HandleDiagOutput(const char *aFormat, va_list aArguments, void *aContext);
+    void        HandleDiagOutput(const char *aFormat, va_list aArguments);
+#endif
+
     void SetCommandTimeout(uint32_t aTimeoutMilli);
 
     static void HandleTimer(Timer &aTimer);
@@ -444,6 +377,10 @@ private:
 
 #if OPENTHREAD_CLI_DNS_ENABLE
     Dns mDns;
+#endif
+
+#if OPENTHREAD_CONFIG_MULTICAST_DNS_ENABLE && OPENTHREAD_CONFIG_MULTICAST_DNS_PUBLIC_API_ENABLE
+    Mdns mMdns;
 #endif
 
 #if (OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2)

@@ -117,7 +117,7 @@ void NetworkData::OutputPrefix(const otBorderRouterConfig &aConfig)
         OutputFormat(" %s", flagsString);
     }
 
-    OutputLine(" %s %04x", Interpreter::PreferenceToString(aConfig.mPreference), aConfig.mRloc16);
+    OutputLine(" %s %04x", PreferenceToString(aConfig.mPreference), aConfig.mRloc16);
 }
 
 void NetworkData::RouteFlagsToString(const otExternalRouteConfig &aConfig, FlagsString &aString)
@@ -155,7 +155,7 @@ void NetworkData::OutputRoute(const otExternalRouteConfig &aConfig)
         OutputFormat(" %s", flagsString);
     }
 
-    OutputLine(" %s %04x", Interpreter::PreferenceToString(aConfig.mPreference), aConfig.mRloc16);
+    OutputLine(" %s %04x", PreferenceToString(aConfig.mPreference), aConfig.mRloc16);
 }
 
 void NetworkData::OutputService(const otServiceConfig &aConfig)
@@ -170,7 +170,7 @@ void NetworkData::OutputService(const otServiceConfig &aConfig)
         OutputFormat(" s");
     }
 
-    OutputLine(" %04x", aConfig.mServerConfig.mRloc16);
+    OutputLine(" %04x %u", aConfig.mServerConfig.mRloc16, aConfig.mServiceId);
 }
 
 /**
@@ -343,7 +343,7 @@ template <> otError NetworkData::Process<Cmd("publish")>(Arg aArgs[])
     {
         otBorderRouterConfig config;
 
-        SuccessOrExit(error = Interpreter::ParsePrefix(aArgs + 1, config));
+        SuccessOrExit(error = ParsePrefix(aArgs + 1, config));
         error = otNetDataPublishOnMeshPrefix(GetInstancePtr(), &config);
         ExitNow();
     }
@@ -364,7 +364,7 @@ template <> otError NetworkData::Process<Cmd("publish")>(Arg aArgs[])
     {
         otExternalRouteConfig config;
 
-        SuccessOrExit(error = Interpreter::ParseRoute(aArgs + 1, config));
+        SuccessOrExit(error = ParseRoute(aArgs + 1, config));
         error = otNetDataPublishExternalRoute(GetInstancePtr(), &config);
         ExitNow();
     }
@@ -387,7 +387,7 @@ template <> otError NetworkData::Process<Cmd("publish")>(Arg aArgs[])
         otExternalRouteConfig config;
 
         SuccessOrExit(error = aArgs[1].ParseAsIp6Prefix(prefix));
-        SuccessOrExit(error = Interpreter::ParseRoute(aArgs + 2, config));
+        SuccessOrExit(error = ParseRoute(aArgs + 2, config));
         error = otNetDataReplacePublishedExternalRoute(GetInstancePtr(), &prefix, &config);
         ExitNow();
     }
@@ -493,7 +493,7 @@ template <> otError NetworkData::Process<Cmd("steeringdata")>(Arg aArgs[])
 
     VerifyOrExit(aArgs[0] == "check", error = OT_ERROR_INVALID_ARGS);
 
-    error = Interpreter::ParseJoinerDiscerner(aArgs[1], discerner);
+    error = ParseJoinerDiscerner(aArgs[1], discerner);
 
     if (error == OT_ERROR_NOT_FOUND)
     {
@@ -713,8 +713,8 @@ exit:
  * Routes:
  * fd49:7770:7fc5:0::/64 s med 4000
  * Services:
- * 44970 5d c000 s 4000
- * 44970 01 9a04b000000e10 s 4000
+ * 44970 5d c000 s 4000 0
+ * 44970 01 9a04b000000e10 s 4000 1
  * Contexts:
  * fd00:dead:beef:cafe::/64 1 c
  * Commissioning:
@@ -771,6 +771,7 @@ exit:
  * * Flags
  *   * s: Stable flag
  * * RLOC16 of devices which added the service entry
+ * * Service ID
  * @par
  * 6LoWPAN Context IDs are listed under `Contexts` header:
  * * The prefix

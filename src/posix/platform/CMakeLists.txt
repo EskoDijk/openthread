@@ -135,6 +135,7 @@ add_library(openthread-posix
     infra_if.cpp
     logging.cpp
     mainloop.cpp
+    mdns_socket.cpp
     memory.cpp
     misc.cpp
     multicast_routing.cpp
@@ -142,8 +143,10 @@ add_library(openthread-posix
     power.cpp
     radio.cpp
     radio_url.cpp
+    rcp_caps_diag.cpp
     resolver.cpp
     settings.cpp
+    spinel_manager.cpp
     spi_interface.cpp
     system.cpp
     trel.cpp
