@@ -28,7 +28,7 @@
 
 /**
  * @file
- *   This file implements a Commissioner role.
+ *   This file implements CCM Commissioner functions for the Commissioner class.
  */
 
 #include "commissioner.hpp"
@@ -58,35 +58,55 @@ namespace MeshCoP {
 
 RegisterLogModule("CommissionerC");
 
-void Commissioner::SendBrskiRelayTransmit(const Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo,
+void Commissioner::SendBrskiRelayTransmit(const Coap::Message &aRlyMessage, const Ip6::MessageInfo &aMessageInfo,
                                           uint16_t joinerPort, const Ip6::InterfaceIdentifier &joinerIid, uint16_t joinerRloc)
 {
     OT_UNUSED_VARIABLE(aMessageInfo);
 
     Error   error = kErrorNone;
     Message *message = nullptr;
+    uint8_t buf[1280]; // FIXME could be dynamic buffer
+    uint16_t bufLen;
 
-    message = this->NewJpyMessage(aMessage, joinerPort, joinerIid, joinerRloc);
+    LogDebg("FIXME SendBrskiRelayTransmit");
+
+    // get DTLS payload from relay msg
+    VerifyOrExit(aRlyMessage.GetLength() <= sizeof(buf));
+    bufLen = aRlyMessage.ReadBytes(aRlyMessage.GetOffset(), buf, aRlyMessage.GetLength() - aRlyMessage.GetOffset());
+
+    message = this->NewJpyMessage( reinterpret_cast<const uint8_t *>(&buf), bufLen, joinerPort, joinerIid, joinerRloc);
     VerifyOrExit(message != nullptr, error = kErrorNoBufs);
 
     SuccessOrExit(error = ForwardToRegistrar(*message));
     LogInfo("Sent to Registrar on RelayRx (%s)", PathForUri(kUriWellknownThreadRelayRx));
 
 exit:
+    LogDebg("FIXME SendBrskiRelayTransmit exit error = %d", error);
     if (message != nullptr) {
         message->Free();
     }
 }
 
-Message* Commissioner::NewJpyMessage(const Coap::Message &aMessage,
-                               uint16_t joinerPort, const Ip6::InterfaceIdentifier &joinerIid, uint16_t joinerRloc)
+Message* Commissioner::NewJpyMessage(const uint8_t *aDtlsData,  uint16_t aDtlsLen, uint16_t joinerPort,
+                                     const Ip6::InterfaceIdentifier &joinerIid, uint16_t joinerRloc)
 {
-    OT_UNUSED_VARIABLE(aMessage);
-    OT_UNUSED_VARIABLE(joinerPort);
-    OT_UNUSED_VARIABLE(joinerIid);
-    OT_UNUSED_VARIABLE(joinerRloc);
+    OT_UNUSED_VARIABLE(aDtlsData);
 
-    return nullptr;
+    JpyHeader hdr;
+    Message   *jpyMsg;
+    uint16_t  jpyPayloadSize = sizeof(struct JpyHeader) + aDtlsLen;
+
+    hdr.mPort = joinerPort;
+    hdr.mRloc = joinerRloc;
+    hdr.mIid = joinerIid;
+
+    jpyMsg = Get<Ip6::Udp>().NewMessage(jpyPayloadSize);
+    if (jpyMsg != nullptr) {
+        // FIXME copy header
+        //  ((JpyHeader) jpyMsg) = hdr;
+
+    }
+    return jpyMsg;
 }
 
 Error Commissioner::ForwardToRegistrar(Message &aJpyMessage)

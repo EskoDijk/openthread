@@ -398,6 +398,15 @@ private:
         void CopyToJoinerInfo(otJoinerInfo &aJoiner) const;
     };
 
+    // FIXME OT_TOOL_PACKED_BEGIN
+    struct JpyHeader
+    {
+        uint16_t mPort;
+        uint16_t mRloc;
+        Ip6::InterfaceIdentifier mIid;
+    };
+    // FIXME OT_TOOL_PACKED_END
+
     Error   Stop(ResignMode aResignMode);
     Joiner *GetUnusedJoinerEntry(void);
     Joiner *FindJoinerEntry(const Mac::ExtAddress *aEui64);
@@ -456,8 +465,8 @@ private:
     void         SendBrskiRelayTransmit(const Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo,
                                         uint16_t joinerPort, const Ip6::InterfaceIdentifier &joinerIid, uint16_t joinerRloc);
     Error        ForwardToRegistrar(Message &aJpyMessage);
-    Message*     NewJpyMessage(const Coap::Message &aMessage,
-                               uint16_t joinerPort, const Ip6::InterfaceIdentifier &joinerIid, uint16_t joinerRloc);
+    Message*     NewJpyMessage(const uint8_t *aDtlsData, uint16_t aDtlsLen, uint16_t joinerPort,
+                               const Ip6::InterfaceIdentifier &joinerIid, uint16_t joinerRloc);
 
     void  ComputeBloomFilter(SteeringData &aSteeringData) const;
     void  SendCommissionerSet(void);

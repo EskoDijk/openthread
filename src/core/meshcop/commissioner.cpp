@@ -917,6 +917,7 @@ template <> void Commissioner::HandleTmf<kUriRelayRx>(Coap::Message &aMessage, c
     uint16_t                 startOffset;
     uint16_t                 endOffset;
 
+    LogDebg("FIXME commissioner.cpp HandleTmf kUriRelayRx");
     VerifyOrExit(mState == kStateActive, error = kErrorInvalidState);
 
     VerifyOrExit(aMessage.IsNonConfirmablePostRequest());
@@ -932,7 +933,9 @@ template <> void Commissioner::HandleTmf<kUriRelayRx>(Coap::Message &aMessage, c
     // TODO get stored context based on Joiner IID / port etc -> allow pure DTLS to go outside BA.
     if (mCommissioningExtensionsMode)
     {
-        switch (joinerPort & 0x000f)
+        uint16_t proto = joinerPort & 0x000f;
+        LogDebg("FIXME mCommissioningExtensionsMode: proto=%d", proto);
+        switch (proto)
         {
         case 1: // CCM-BRSKI
             this->SendBrskiRelayTransmit(aMessage, aMessageInfo, joinerPort, joinerIid, joinerRloc);

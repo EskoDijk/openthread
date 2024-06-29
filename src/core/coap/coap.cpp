@@ -1324,8 +1324,10 @@ void CoapBase::ProcessReceivedRequest(Message &aMessage, const Ip6::MessageInfo 
     uint32_t         totalTransferSize = 0;
 #endif
 
+    LogDebg("FIXME coap.cpp ProcessReceivedRequest");
     if (mInterceptor.IsSet())
     {
+        LogDebg("FIXME coap.cpp mInterceptor.IsSet");
         SuccessOrExit(error = mInterceptor.Invoke(aMessage, aMessageInfo));
     }
 
@@ -1457,6 +1459,7 @@ void CoapBase::ProcessReceivedRequest(Message &aMessage, const Ip6::MessageInfo 
     {
         if (strcmp(resource.mUriPath, uriPath) == 0)
         {
+            LogDebg("FIXME coap.cpp resource.HandleRequest %s", uriPath);
             resource.HandleRequest(aMessage, aMessageInfo);
             error = kErrorNone;
             ExitNow();
