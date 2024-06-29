@@ -87,14 +87,15 @@ exit:
     }
 }
 
+// FIXME return error and set msg via params
 Message* Commissioner::NewJpyMessage(const uint8_t *aDtlsData,  uint16_t aDtlsLen, uint16_t joinerPort,
                                      const Ip6::InterfaceIdentifier &joinerIid, uint16_t joinerRloc)
 {
     OT_UNUSED_VARIABLE(aDtlsData);
 
     JpyHeader hdr;
-    Message   *jpyMsg;
-    uint16_t  jpyPayloadSize = sizeof(struct JpyHeader) + aDtlsLen;
+    Message   *jpyMsg = nullptr;
+    uint16_t  jpyPayloadSize = sizeof(struct JpyHeader) + aDtlsLen + 128; // FIXME
 
     hdr.mPort = joinerPort;
     hdr.mRloc = joinerRloc;
@@ -104,8 +105,14 @@ Message* Commissioner::NewJpyMessage(const uint8_t *aDtlsData,  uint16_t aDtlsLe
     if (jpyMsg != nullptr) {
         // FIXME copy header
         //  ((JpyHeader) jpyMsg) = hdr;
-
+        SuccessOrExit(jpyMsg->SetLength(aDtlsLen));
+        LogDebg("jpyMsg->GetOffset() = %d", jpyMsg->GetOffset());
+        LogDebg("aDtlsLen=%d", aDtlsLen);
+        LogDebg("jpyMsg->GetLength() = %d", jpyMsg->GetLength());
+        jpyMsg->WriteBytes(jpyMsg->GetOffset(), aDtlsData, aDtlsLen);
     }
+
+exit:
     return jpyMsg;
 }
 
@@ -129,12 +136,13 @@ Error Commissioner::ForwardToRegistrar(Message &aJpyMessage)
     Ip6::Address registrarIp6Address = Ip6::Address();
 
     SuccessOrExit(error = registrarIp6Address.FromString("910b::1234")); // FIXME hardcoded
+    msgInfo.SetSockPort(59999); // FIXME test
     msgInfo.SetPeerAddr(registrarIp6Address);
-    msgInfo.SetPeerPort(5683); // FIXME hardcoded
+    msgInfo.SetPeerPort(5684); // FIXME hardcoded for DTLS
     msgInfo.SetIsHostInterface(true);
 
     SuccessOrExit(error = Get<Ip6::Udp>().SendTo(mSocket, aJpyMessage, msgInfo));
-    LogInfo("Sent to Registrar");
+    LogInfo("Sent to Registrar successfully");
 
 exit:
     LogWarnOnError(error, "send to Registrar");
