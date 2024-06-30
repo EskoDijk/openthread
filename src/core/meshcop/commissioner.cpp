@@ -938,7 +938,7 @@ template <> void Commissioner::HandleTmf<kUriRelayRx>(Coap::Message &aMessage, c
         switch (proto)
         {
         case 1: // CCM-BRSKI
-            this->SendBrskiRelayTransmit(aMessage, aMessageInfo, joinerPort, joinerIid, joinerRloc);
+            this->SendBrskiRelayTransmit(aMessage, aMessageInfo, startOffset, endOffset - startOffset, joinerPort, joinerIid, joinerRloc);
             ExitNow(); // no handling by local Commissioner.
         default: // in case unrecognized or MeshCop
             break;

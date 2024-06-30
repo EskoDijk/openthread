@@ -463,6 +463,7 @@ private:
     static Error SendRelayTransmit(void *aContext, Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
     Error        SendRelayTransmit(Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
     void         SendBrskiRelayTransmit(const Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo,
+                                        uint16_t dtlsPayloadOffset, uint16_t dtlsLen,
                                         uint16_t joinerPort, const Ip6::InterfaceIdentifier &joinerIid, uint16_t joinerRloc);
     Error        ForwardToRegistrar(Message &aJpyMessage);
     Message*     NewJpyMessage(const uint8_t *aDtlsData, uint16_t aDtlsLen, uint16_t joinerPort,
@@ -508,7 +509,7 @@ private:
 
     State mState;
     bool  mCommissioningExtensionsMode;
-    Ip6::Udp::SocketHandle mSocket; // FIXME rename
+    Ip6::Udp::SocketHandle mRelaySocket;
 
     Callback<StateCallback>  mStateCallback;
     Callback<JoinerCallback> mJoinerCallback;

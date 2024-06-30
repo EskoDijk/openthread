@@ -59,6 +59,7 @@ namespace MeshCoP {
 RegisterLogModule("CommissionerC");
 
 void Commissioner::SendBrskiRelayTransmit(const Coap::Message &aRlyMessage, const Ip6::MessageInfo &aMessageInfo,
+                                          uint16_t dtlsPayloadOffset, uint16_t dtlsLen,
                                           uint16_t joinerPort, const Ip6::InterfaceIdentifier &joinerIid, uint16_t joinerRloc)
 {
     OT_UNUSED_VARIABLE(aMessageInfo);
@@ -66,15 +67,18 @@ void Commissioner::SendBrskiRelayTransmit(const Coap::Message &aRlyMessage, cons
     Error   error = kErrorNone;
     Message *message = nullptr;
     uint8_t buf[1280]; // FIXME could be dynamic buffer
+    uint8_t *bufPtr = &buf[0];
     uint16_t bufLen;
 
     LogDebg("FIXME SendBrskiRelayTransmit");
 
     // get DTLS payload from relay msg
     VerifyOrExit(aRlyMessage.GetLength() <= sizeof(buf));
-    bufLen = aRlyMessage.ReadBytes(aRlyMessage.GetOffset(), buf, aRlyMessage.GetLength() - aRlyMessage.GetOffset());
+    LogDebg("FIXME aRlyMessage.GetLength() = %d", aRlyMessage.GetLength());
+    LogDebg("FIXME aRlyMessage.GetOffset() = %d", aRlyMessage.GetOffset());
+    bufLen = aRlyMessage.ReadBytes(dtlsPayloadOffset, buf, dtlsLen);
 
-    message = this->NewJpyMessage( reinterpret_cast<const uint8_t *>(&buf), bufLen, joinerPort, joinerIid, joinerRloc);
+    message = this->NewJpyMessage( bufPtr, bufLen, joinerPort, joinerIid, joinerRloc);
     VerifyOrExit(message != nullptr, error = kErrorNoBufs);
 
     SuccessOrExit(error = ForwardToRegistrar(*message));
@@ -91,8 +95,6 @@ exit:
 Message* Commissioner::NewJpyMessage(const uint8_t *aDtlsData,  uint16_t aDtlsLen, uint16_t joinerPort,
                                      const Ip6::InterfaceIdentifier &joinerIid, uint16_t joinerRloc)
 {
-    OT_UNUSED_VARIABLE(aDtlsData);
-
     JpyHeader hdr;
     Message   *jpyMsg = nullptr;
     uint16_t  jpyPayloadSize = sizeof(struct JpyHeader) + aDtlsLen + 128; // FIXME
@@ -136,12 +138,13 @@ Error Commissioner::ForwardToRegistrar(Message &aJpyMessage)
     Ip6::Address registrarIp6Address = Ip6::Address();
 
     SuccessOrExit(error = registrarIp6Address.FromString("910b::1234")); // FIXME hardcoded
-    msgInfo.SetSockPort(59999); // FIXME test
+    msgInfo.SetSockPort(0); // FIXME test
     msgInfo.SetPeerAddr(registrarIp6Address);
     msgInfo.SetPeerPort(5684); // FIXME hardcoded for DTLS
     msgInfo.SetIsHostInterface(true);
 
-    SuccessOrExit(error = Get<Ip6::Udp>().SendTo(mSocket, aJpyMessage, msgInfo));
+    LogDebg("FIXME SendTo (JpyMessage)");
+    SuccessOrExit(error = Get<Ip6::Udp>().SendTo(mRelaySocket, aJpyMessage, msgInfo));
     LogInfo("Sent to Registrar successfully");
 
 exit:
