@@ -508,11 +508,18 @@ void Udp::HandlePayload(Message &aMessage, MessageInfo &aMessageInfo)
         {
             LogDebg("FIXME scanning backbone sockets");
             socketsBegin = GetBackboneSockets();
+            if (socketsBegin== nullptr)
+                LogDebg("FIXME GetBackboneSockets() = null");
+            else
+                LogDebg("FIXME GetBackboneSockets() = port %d", socketsBegin->GetSockName().GetPort());
             socketsEnd   = nullptr;
         }
 
         socket = mSockets.FindMatching(socketsBegin, socketsEnd, aMessageInfo, prev);
-        LogDebg("FIXME scanning backbone socket found = %u", socket->GetSockName().GetPort());
+        if (socketsBegin== nullptr)
+            LogDebg("FIXME mSockets.FindMatching = null");
+        else
+            LogDebg("FIXME scanning backbone socket found = %u", socket->GetSockName().GetPort());
     }
 #else
     socket = mSockets.FindMatching(aMessageInfo, prev);
