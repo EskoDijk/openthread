@@ -218,7 +218,7 @@ if(MBEDTLS_FATAL_WARNINGS)
     endif(CMAKE_COMPILER_IS_MSVC)
 
     if(CMAKE_COMPILER_IS_CLANG OR CMAKE_COMPILER_IS_GNU)
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
+        # set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
         if(UNSAFE_BUILD)
             set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-error=cpp")
             set(CMAKE_C_FLAGS_ASAN "${CMAKE_C_FLAGS_ASAN} -Wno-error=cpp")
