@@ -516,19 +516,25 @@ void Udp::HandlePayload(Message &aMessage, MessageInfo &aMessageInfo)
         }
 
         socket = mSockets.FindMatching(socketsBegin, socketsEnd, aMessageInfo, prev);
-        if (socketsBegin== nullptr)
+        if (socket == nullptr)
             LogDebg("FIXME mSockets.FindMatching = null");
         else
             LogDebg("FIXME scanning backbone socket found = %u", socket->GetSockName().GetPort());
     }
 #else
+    LogDebg("Udp::HandlePayload looking for FindMatching socket");
     socket = mSockets.FindMatching(aMessageInfo, prev);
 #endif
 
+    if (socket == nullptr)
+        LogDebg("FIXME mSockets.FindMatching = null");
+    else
+        LogDebg("FIXME scanning backbone socket found = %u", socket->GetSockName().GetPort());
     VerifyOrExit(socket != nullptr);
 
     aMessage.RemoveHeader(aMessage.GetOffset());
     OT_ASSERT(aMessage.GetOffset() == 0);
+    LogDebg("FIXME calling socket->HandleUdpReceive()");
     socket->HandleUdpReceive(aMessage, aMessageInfo);
 
 exit:

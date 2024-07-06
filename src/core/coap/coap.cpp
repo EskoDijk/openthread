@@ -352,7 +352,7 @@ Error CoapBase::SendMessage(Message                &aMessage,
 
     LogDebg("before send FIXME");
     SuccessOrExit(error = Send(aMessage, aMessageInfo));
-    LogDebg("before after send FIXME");
+    LogDebg("after send FIXME error = %d", error);
 
 exit:
 
@@ -362,6 +362,7 @@ exit:
         DequeueMessage(*storedCopy);
     }
 
+    LogDebg("exit send FIXME error = %d", error);
     return error;
 }
 
