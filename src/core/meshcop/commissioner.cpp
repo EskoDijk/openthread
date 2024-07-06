@@ -71,6 +71,7 @@ Commissioner::Commissioner(Instance &aInstance)
     , mEnergyScan(aInstance)
     , mPanIdQuery(aInstance)
     , mState(kStateDisabled)
+    , mRelaySocket()
 {
     ClearAllBytes(mJoiners);
 
@@ -80,6 +81,15 @@ Commissioner::Commissioner(Instance &aInstance)
     IgnoreError(SetId("OpenThread Commissioner"));
 
     mProvisioningUrl[0] = '\0';
+
+    // FIXME only open if needed?
+    Error err = Get<Ip6::Udp>().Open(this->mRelaySocket, HandleRelayRegistrarCallback, this);
+    LogDebg("FIXME mRelaySocket.Open() err=%d", err);
+    LogDebg("FIXME UDP src port = %d", mRelaySocket.GetSockName().GetPort());
+    Ip6::SockAddr sockAddr = Ip6::SockAddr(49123);
+    err = Get<Ip6::Udp>().Bind(this->mRelaySocket, sockAddr, Ip6::NetifIdentifier::kNetifBackbone);
+    LogDebg("FIXME mRelaySocket.Bind() err=%d", err);
+    LogDebg("FIXME UDP src port = %d", mRelaySocket.GetSockName().GetPort());
 }
 
 void Commissioner::SetState(State aState)

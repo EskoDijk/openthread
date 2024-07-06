@@ -71,6 +71,9 @@ void Commissioner::SendBrskiRelayTransmit(const Coap::Message &aRlyMessage, cons
     uint16_t bufLen;
 
     LogDebg("FIXME SendBrskiRelayTransmit");
+    mJoinerPort = joinerPort;
+    mJoinerIid = joinerIid;
+    mJoinerRloc = joinerRloc; // FIXME assumes a single joiner and stateful cBRSKI relay. Test only.
 
     // get DTLS payload from relay msg
     VerifyOrExit(aRlyMessage.GetLength() <= sizeof(buf));
@@ -152,6 +155,15 @@ exit:
     return error;
 }
 
+void Commissioner::HandleRelayRegistrarCallback(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo) {
+    reinterpret_cast<Commissioner *>(aContext)->HandleRelayRegistrar(static_cast<Message *>(aMessage), static_cast<const Ip6::MessageInfo *>(aMessageInfo));
+}
+
+void Commissioner::HandleRelayRegistrar(Message *aMessage, const Ip6::MessageInfo *aMessageInfo) {
+    LogDebg("Received in HandleRelayRegistrar: len=%d", aMessage->GetLength());
+    //LogDebg("", aMessage->)
+    this->SendRelayTransmit(static_cast<Message &>(*aMessage), static_cast<const Ip6::MessageInfo &>(*aMessageInfo));
+}
 
 } // namespace MeshCoP
 } // namespace ot

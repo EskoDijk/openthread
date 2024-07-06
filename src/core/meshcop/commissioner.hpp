@@ -468,6 +468,8 @@ private:
     Error        ForwardToRegistrar(Message &aJpyMessage);
     Message*     NewJpyMessage(const uint8_t *aDtlsData, uint16_t aDtlsLen, uint16_t joinerPort,
                                const Ip6::InterfaceIdentifier &joinerIid, uint16_t joinerRloc);
+    void HandleRelayRegistrar(Message *aMessage, const Ip6::MessageInfo *aMessageInfo);
+    static void HandleRelayRegistrarCallback(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
 
     void  ComputeBloomFilter(SteeringData &aSteeringData) const;
     void  SendCommissionerSet(void);
