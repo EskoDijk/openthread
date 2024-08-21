@@ -130,6 +130,7 @@ void Joiner::SetCcmIdentity(const uint8_t *aX509Cert,
 {
     Get<Tmf::SecureAgent>().SetCertificate(aX509Cert, aX509Length, aPrivateKey, aPrivateKeyLength);
     Get<Tmf::SecureAgent>().SetCaCertificateChain(aX509CaCertificateChain, aX509CaCertChainLength);
+    Get<Tmf::SecureAgent>().SetSslAuthMode(false); // MUST provisionally trust any Registrar
 }
 
 Error Joiner::Start(const char      *aPskd,

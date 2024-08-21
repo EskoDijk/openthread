@@ -271,7 +271,6 @@ Error CoapBase::SendMessage(Message                &aMessage,
 
     if (aMessage.IsConfirmable())
     {
-        LogDebg("FIXME line 274");
         copyLength = aMessage.GetLength();
     }
     else if (aMessage.IsNonConfirmable() && (aHandler != nullptr))
@@ -318,7 +317,6 @@ Error CoapBase::SendMessage(Message                &aMessage,
         }
 #endif // OPENTHREAD_CONFIG_COAP_OBSERVE_API_ENABLE
 
-        LogDebg("FIXME line 321");
         metadata.mSourceAddress            = aMessageInfo.GetSockAddr();
         metadata.mDestinationPort          = aMessageInfo.GetPeerPort();
         metadata.mDestinationAddress       = aMessageInfo.GetPeerAddr();
@@ -345,24 +343,18 @@ Error CoapBase::SendMessage(Message                &aMessage,
             (metadata.mConfirmable ? metadata.mRetransmissionTimeout : aTxParameters.CalculateMaxTransmitWait());
 
         storedCopy = CopyAndEnqueueMessage(aMessage, copyLength, metadata);
-        LogDebg("FIXME storedCopy is != null: %u", storedCopy != nullptr);
         VerifyOrExit(storedCopy != nullptr, error = kErrorNoBufs);
-        LogDebg("FIXME storedCopy done");
     }
 
-    LogDebg("before send FIXME");
     SuccessOrExit(error = Send(aMessage, aMessageInfo));
-    LogDebg("after send FIXME error = %d", error);
 
 exit:
 
     if (error != kErrorNone && storedCopy != nullptr)
     {
-        LogDebg("FIXME DequeueMessage");
         DequeueMessage(*storedCopy);
     }
 
-    LogDebg("exit send FIXME error = %d", error);
     return error;
 }
 
@@ -1081,12 +1073,10 @@ void CoapBase::Receive(ot::Message &aMessage, const Ip6::MessageInfo &aMessageIn
     }
     else
     {
-        LogDebg("FIXME Coap ProcessReceivedResponse calling");
         ProcessReceivedResponse(message, aMessageInfo);
     }
 
 #if OPENTHREAD_CONFIG_OTNS_ENABLE
-    LogDebg("Calling OTNS Emit coap receive");
     Get<Utils::Otns>().EmitCoapReceive(message, aMessageInfo);
 #endif
 }
@@ -1325,10 +1315,8 @@ void CoapBase::ProcessReceivedRequest(Message &aMessage, const Ip6::MessageInfo 
     uint32_t         totalTransferSize = 0;
 #endif
 
-    LogDebg("FIXME coap.cpp ProcessReceivedRequest");
     if (mInterceptor.IsSet())
     {
-        LogDebg("FIXME coap.cpp mInterceptor.IsSet");
         SuccessOrExit(error = mInterceptor.Invoke(aMessage, aMessageInfo));
     }
 
@@ -1460,7 +1448,6 @@ void CoapBase::ProcessReceivedRequest(Message &aMessage, const Ip6::MessageInfo 
     {
         if (strcmp(resource.mUriPath, uriPath) == 0)
         {
-            LogDebg("FIXME coap.cpp resource.HandleRequest %s", uriPath);
             resource.HandleRequest(aMessage, aMessageInfo);
             error = kErrorNone;
             ExitNow();

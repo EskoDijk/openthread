@@ -43,6 +43,7 @@
 #include "common/encoding.hpp"
 #include "common/locator_getters.hpp"
 #include "common/string.hpp"
+#include "common/as_core_type.hpp"
 #include "instance/instance.hpp"
 #include "net/udp6.hpp"
 #include "meshcop/joiner.hpp"
@@ -70,25 +71,22 @@ void Commissioner::SendBrskiRelayTransmit(const Coap::Message &aRlyMessage, cons
     uint8_t *bufPtr = &buf[0];
     uint16_t bufLen;
 
-    LogDebg("FIXME SendBrskiRelayTransmit");
     mJoinerPort = joinerPort;
     mJoinerIid = joinerIid;
     mJoinerRloc = joinerRloc; // FIXME assumes a single joiner and stateful cBRSKI relay. Test only.
 
     // get DTLS payload from relay msg
     VerifyOrExit(aRlyMessage.GetLength() <= sizeof(buf));
-    LogDebg("FIXME aRlyMessage.GetLength() = %d", aRlyMessage.GetLength());
-    LogDebg("FIXME aRlyMessage.GetOffset() = %d", aRlyMessage.GetOffset());
     bufLen = aRlyMessage.ReadBytes(dtlsPayloadOffset, buf, dtlsLen);
 
     message = this->NewJpyMessage( bufPtr, bufLen, joinerPort, joinerIid, joinerRloc);
     VerifyOrExit(message != nullptr, error = kErrorNoBufs);
 
     SuccessOrExit(error = ForwardToRegistrar(*message));
-    LogInfo("Sent to Registrar on RelayRx (%s)", PathForUri(kUriWellknownThreadRelayRx));
+    LogDebg("Sent to Registrar as DTLS: %u bytes", dtlsLen);
 
 exit:
-    LogDebg("FIXME SendBrskiRelayTransmit exit error = %d", error);
+    LogWarnOnError(error, "SendBrskiRelayTransmit() send");
     if (message != nullptr) {
         message->Free();
     }
@@ -146,7 +144,6 @@ Error Commissioner::ForwardToRegistrar(Message &aJpyMessage)
     msgInfo.SetPeerPort(5684); // FIXME hardcoded for DTLS
     msgInfo.SetIsHostInterface(true);
 
-    LogDebg("FIXME SendTo (JpyMessage)");
     SuccessOrExit(error = Get<Ip6::Udp>().SendTo(mRelaySocket, aJpyMessage, msgInfo));
     LogInfo("Sent to Registrar successfully");
 
@@ -160,9 +157,12 @@ void Commissioner::HandleRelayRegistrarCallback(void *aContext, otMessage *aMess
 }
 
 void Commissioner::HandleRelayRegistrar(Message *aMessage, const Ip6::MessageInfo *aMessageInfo) {
-    LogDebg("Received in HandleRelayRegistrar: len=%d", aMessage->GetLength());
-    //LogDebg("", aMessage->)
-    this->SendRelayTransmit(static_cast<Message &>(*aMessage), static_cast<const Ip6::MessageInfo &>(*aMessageInfo));
+    // create new Relay Tx message to be sent out
+    Message* txMsg = Get<Ip6::Udp>().NewMessage(aMessage->GetLength());
+    txMsg->AppendBytesFromMessage(*aMessage, aMessage->GetOffset(), aMessage->GetLength());
+    this->SendRelayTransmit(*txMsg, *aMessageInfo);
+
+    // txMsg is already freed by SendRelayTransmit(); while aMessage MUST NOT be freed.
 }
 
 } // namespace MeshCoP

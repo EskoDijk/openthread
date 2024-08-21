@@ -84,12 +84,8 @@ Commissioner::Commissioner(Instance &aInstance)
 
     // FIXME only open if needed?
     Error err = Get<Ip6::Udp>().Open(this->mRelaySocket, HandleRelayRegistrarCallback, this);
-    LogDebg("FIXME mRelaySocket.Open() err=%d", err);
-    LogDebg("FIXME UDP src port = %d", mRelaySocket.GetSockName().GetPort());
     Ip6::SockAddr sockAddr = Ip6::SockAddr(49123);
     err = Get<Ip6::Udp>().Bind(this->mRelaySocket, sockAddr, Ip6::NetifIdentifier::kNetifBackbone);
-    LogDebg("FIXME mRelaySocket.Bind() err=%d", err);
-    LogDebg("FIXME UDP src port = %d", mRelaySocket.GetSockName().GetPort());
 }
 
 void Commissioner::SetState(State aState)
@@ -927,7 +923,6 @@ template <> void Commissioner::HandleTmf<kUriRelayRx>(Coap::Message &aMessage, c
     uint16_t                 startOffset;
     uint16_t                 endOffset;
 
-    LogDebg("FIXME commissioner.cpp HandleTmf kUriRelayRx");
     VerifyOrExit(mState == kStateActive, error = kErrorInvalidState);
 
     VerifyOrExit(aMessage.IsNonConfirmablePostRequest());
@@ -944,7 +939,6 @@ template <> void Commissioner::HandleTmf<kUriRelayRx>(Coap::Message &aMessage, c
     if (mCommissioningExtensionsMode)
     {
         uint16_t proto = joinerPort & 0x000f;
-        LogDebg("FIXME mCommissioningExtensionsMode: proto=%d", proto);
         switch (proto)
         {
         case 1: // CCM-BRSKI
@@ -1157,6 +1151,7 @@ Error Commissioner::SendRelayTransmit(Message &aMessage, const Ip6::MessageInfo 
     aMessage.Free();
 
 exit:
+    LogWarnOnError(error, "Comm::SendRelayTransmit()");
     FreeMessageOnError(message, error);
     return error;
 }

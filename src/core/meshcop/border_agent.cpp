@@ -321,7 +321,6 @@ template <> void BorderAgent::HandleTmf<kUriProxyTx>(Coap::Message &aMessage, co
     uint16_t                  length;
     UdpEncapsulationTlvHeader udpEncapHeader;
 
-    LogDebg("FIXME border_agent.cpp HandleTmf kUriRelayRx");
     VerifyOrExit(mState != kStateStopped);
 
     SuccessOrExit(error = Tlv::FindTlvValueOffset(aMessage, Tlv::kUdpEncapsulation, offset, length));
