@@ -84,8 +84,10 @@ Commissioner::Commissioner(Instance &aInstance)
 
     // FIXME only open if needed?
     Error err = Get<Ip6::Udp>().Open(this->mRelaySocket, HandleRelayRegistrarCallback, this);
+    LogWarnOnError(err, "Commissioner relay socket opening");
     Ip6::SockAddr sockAddr = Ip6::SockAddr(49123);
     err = Get<Ip6::Udp>().Bind(this->mRelaySocket, sockAddr, Ip6::NetifIdentifier::kNetifBackbone);
+    LogWarnOnError(err, "Commissioner relay socket binding");
 }
 
 void Commissioner::SetState(State aState)
