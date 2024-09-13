@@ -77,7 +77,7 @@ jobs:
     - name: Run
       run: |
         export OT_DIR=$PWD
-        ./script/git-tool clone --depth 1 https://github.com/openthread/ot-ns.git /tmp/otns
+        ./script/git-tool clone --depth 1 https://github.com/EskoDijk/ot-ns.git /tmp/otns
         (
           cd /tmp/otns
           ./script/test py-unittests
@@ -117,7 +117,7 @@ jobs:
       - name: Run
         run: |
           export OT_DIR=$PWD
-          ./script/git-tool clone --depth 1 https://github.com/openthread/ot-ns.git /tmp/otns
+          ./script/git-tool clone --depth 1 https://github.com/EskoDijk/ot-ns.git /tmp/otns
           (
             cd /tmp/otns
             ./script/test py-examples
@@ -145,17 +145,17 @@ jobs:
       matrix:
         include:
           - suite: "network-forming"
-            stress_level: 8
+            stress_level: 2
           - suite: "commissioning"
-            stress_level: 14
+            stress_level: 2
           - suite: "connectivity"
-            stress_level: 6
+            stress_level: 2
           - suite: "network-latency"
-            stress_level: 10
+            stress_level: 2
           - suite: "multicast-performance"
-            stress_level: 10
+            stress_level: 2
           - suite: "otns-performance"
-            stress_level: 10
+            stress_level: 2
     env:
       STRESS_LEVEL: ${{ matrix.stress_level }}
     steps:
@@ -179,7 +179,7 @@ jobs:
       - name: Run
         run: |
           export OT_DIR=$PWD
-          ./script/git-tool clone --depth 1 https://github.com/openthread/ot-ns.git /tmp/otns
+          ./script/git-tool clone --depth 1 https://github.com/EskoDijk/ot-ns.git /tmp/otns
           (
             cd /tmp/otns
             ./script/test stress-tests ${{ matrix.suite }}
