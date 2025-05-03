@@ -64,6 +64,8 @@ TcatAgent::TcatAgent(Instance &aInstance)
     , mPskdVerified(false)
     , mPskcVerified(false)
     , mInstallCodeVerified(false)
+    , mTimer(aInstance)
+    , mEnableDuration(0)
 {
     mJoinerPskd.Clear();
     mCurrentServiceName[0] = 0;
@@ -864,6 +866,59 @@ Error TcatAgent::HandleStartThreadInterface(void)
 
 exit:
     return error;
+}
+
+void TcatAgent::HandleTimer(void)
+{
+    //
+}
+
+template <> void TcatAgent::HandleTmf<kUriTcatEnable>(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
+{
+    Error          error = kErrorNone;
+    Coap::Message *message = nullptr;
+    uint32_t       delayTimerMs;
+    uint16_t       durationSec;
+
+    VerifyOrExit(aMessage.IsConfirmablePostRequest());
+
+    LogInfo("Received %s from %s", UriToString<kUriTcatEnable>(),
+            aMessageInfo.GetPeerAddr().ToString().AsCString());
+
+    message = Get<Tmf::Agent>().NewResponseMessage(aMessage);
+    VerifyOrExit(message != nullptr, error = kErrorNoBufs);
+
+    SuccessOrExit(error = Tlv::Find<DelayTimerTlv>(aMessage, delayTimerMs));
+
+    if (Tlv::Find<DurationTlv>(aMessage, durationSec) != kErrorNone)
+    {
+        durationSec = kTcatTmfEnableDefaultSec; // OPTIONAL Duration TLV absent: use default duration
+    }
+    VerifyOrExit(durationSec > 0, error = kErrorParse);
+
+    if (IsEnabled())
+    {
+        if (mEnableDuration == 0)
+        {
+            ExitNow();
+        }
+        if (durationSec > mEnableDuration)
+        {
+            mEnableDuration = durationSec;
+        }
+    }
+
+exit:
+    if (message != nullptr) {
+        if (error == kErrorParse || error == kErrorNotFound) {
+            message->SetCode(Coap::kCodeBadRequest);
+        }else
+        {
+            IgnoreError(Tlv::Append<StateTlv>(*message, error == kErrorNone ? StateTlv::State::kAccept
+                                                                            : StateTlv::State::kReject));
+        }
+        IgnoreError(Get<Tmf::Agent>().SendMessage(*message, aMessageInfo));
+    }
 }
 
 void SeralizeTcatAdvertisementTlv(uint8_t                 *aBuffer,

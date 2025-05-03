@@ -52,6 +52,7 @@
 #include "meshcop/meshcop.hpp"
 #include "meshcop/meshcop_tlvs.hpp"
 #include "meshcop/secure_transport.hpp"
+#include "thread/tmf.hpp"
 
 namespace ot {
 
@@ -63,6 +64,9 @@ namespace MeshCoP {
 
 class TcatAgent : public InstanceLocator, private NonCopyable
 {
+    friend class Ble::BleSecure;
+    friend class Tmf::Agent;
+
 public:
     /**
      * Pointer to call when application data was received over the TLS connection.
@@ -361,6 +365,9 @@ private:
                                 bool          &aResponse);
     Error HandleStartThreadInterface(void);
     Error HandleGetCommissionerCertificate(Message &aOutgoingMessage, bool &aResponse);
+    void  HandleTimer(void);
+
+    template <Uri kUri> void HandleTmf(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
 
     Error VerifyHash(const Message &aIncomingMessage,
                      uint16_t       aOffset,
@@ -383,6 +390,7 @@ private:
     static constexpr uint16_t kTcatMaxDeviceIdSize       = OT_TCAT_MAX_DEVICEID_SIZE;
     static constexpr uint16_t kInstallCodeMaxSize        = 255;
     static constexpr uint16_t kCommissionerCertMaxLength = 1024;
+    static constexpr uint16_t kTcatTmfEnableDefaultSec   = 600; ///< TCAT_ENABLE_MAX
 
     JoinerPskd                       mJoinerPskd;
     const VendorInfo                *mVendorInfo;
@@ -403,8 +411,9 @@ private:
     bool                             mPskdVerified : 1;
     bool                             mPskcVerified : 1;
     bool                             mInstallCodeVerified : 1;
-
-    friend class Ble::BleSecure;
+    using ExpireTimer = TimerMilliIn<TcatAgent, &TcatAgent::HandleTimer>;
+    ExpireTimer                      mTimer;
+    uint16_t                         mEnableDuration;
 };
 
 } // namespace MeshCoP
@@ -413,6 +422,8 @@ DefineCoreType(otTcatVendorInfo, MeshCoP::TcatAgent::VendorInfo);
 
 DefineMapEnum(otTcatApplicationProtocol, MeshCoP::TcatAgent::TcatApplicationProtocol);
 DefineMapEnum(otTcatAdvertisedDeviceIdType, MeshCoP::TcatAgent::TcatDeviceIdType);
+
+DeclareTmfHandler(MeshCoP::TcatAgent, kUriTcatEnable);
 
 // Command class TLVs
 typedef UintTlvInfo<MeshCoP::TcatAgent::kTlvResponseWithStatus, uint8_t> ResponseWithStatusTlv;

@@ -83,6 +83,7 @@ static constexpr Entry kEntries[] = {
     {"c/pq"},  // (27) kUriPanIdQuery
     {"c/ps"},  // (28) kUriPendingSet
     {"c/rx"},  // (29) kUriRelayRx
+    {"c/te"},  // (30) kUriTcatEnable
     {"c/tx"},  // (30) kUriRelayTx
     {"c/ur"},  // (31) kUriProxyRx
     {"c/ut"},  // (32) kUriProxyTx
@@ -130,6 +131,7 @@ struct UriEnumCheck
     ValidateNextEnum(kUriPanIdQuery);
     ValidateNextEnum(kUriPendingSet);
     ValidateNextEnum(kUriRelayRx);
+    ValidateNextEnum(kUriTcatEnable);
     ValidateNextEnum(kUriRelayTx);
     ValidateNextEnum(kUriProxyRx);
     ValidateNextEnum(kUriProxyTx);
@@ -193,6 +195,7 @@ template <> const char *UriToString<kUriPendingGet>(void) { return "PendingGet";
 template <> const char *UriToString<kUriPanIdQuery>(void) { return "PanIdQuery"; }
 template <> const char *UriToString<kUriPendingSet>(void) { return "PendingSet"; }
 template <> const char *UriToString<kUriRelayRx>(void) { return "RelayRx"; }
+template <> const char *UriToString<kUriTcatEnable>(void) { return "TcatEnable"; }
 template <> const char *UriToString<kUriRelayTx>(void) { return "RelayTx"; }
 template <> const char *UriToString<kUriProxyRx>(void) { return "ProxyRx"; }
 template <> const char *UriToString<kUriProxyTx>(void) { return "ProxyTx"; }
