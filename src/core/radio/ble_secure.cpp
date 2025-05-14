@@ -101,7 +101,8 @@ Error BleSecure::TcatStart(MeshCoP::TcatAgent::JoinCallback aJoinHandler)
 
     VerifyOrExit(mBleState != kStopped, error = kErrorInvalidState);
 
-    error = mTcatAgent.Start(mReceiveCallback.GetHandler(), aJoinHandler, mReceiveCallback.GetContext());
+    SuccessOrExit(error = mTcatAgent.Start(mReceiveCallback.GetHandler(), aJoinHandler, mReceiveCallback.GetContext()));
+    error = UpdateAdvertisingForTcat();
 
 exit:
     return error;
@@ -110,16 +111,14 @@ exit:
 void BleSecure::Stop(void)
 {
     VerifyOrExit(mBleState != kStopped);
-    SuccessOrExit(otPlatBleGapAdvStop(&GetInstance()));
-    SuccessOrExit(otPlatBleDisable(&GetInstance()));
+
+    // Even if stop advertisements or disable BLE would fail, we continue closing TLS and stopping TCAT agent.
+    IgnoreError(otPlatBleGapAdvStop(&GetInstance()));
+    IgnoreError(otPlatBleDisable(&GetInstance()));
     mBleState = kStopped;
     mMtuSize  = kInitialMtuSize;
 
-    if (mTcatAgent.IsEnabled())
-    {
-        mTcatAgent.Stop();
-    }
-
+    mTcatAgent.Stop();
     mTls.Close();
 
     mTransmitQueue.DequeueAndFreeAll();
@@ -136,6 +135,27 @@ exit:
     return;
 }
 
+Error BleSecure::TcatActive(bool aActive)
+{
+    Error error;
+
+    VerifyOrExit(mBleState != kStopped, error = kErrorInvalidState);
+
+    if (aActive)
+    {
+        SuccessOrExit(error = mTcatAgent.Activate());
+    }
+    else
+    {
+        SuccessOrExit(error = mTcatAgent.Standby());
+    }
+
+    error = UpdateAdvertisingForTcat();
+
+exit:
+    return error;
+}
+
 Error BleSecure::Connect(void)
 {
     Ip6::SockAddr sockaddr;
@@ -144,6 +164,11 @@ Error BleSecure::Connect(void)
     VerifyOrExit(mBleState == kConnected, error = kErrorInvalidState);
 
     error = mTls.Connect(sockaddr);
+
+    if (mTcatAgent.IsStarted())
+    {
+        IgnoreError(UpdateAdvertisingForTcat());
+    }
 
 exit:
     return error;
@@ -160,6 +185,12 @@ void BleSecure::Disconnect(void)
     {
         mBleState = kAdvertising;
         IgnoreError(otPlatBleGapDisconnect(&GetInstance()));
+
+        if (mTcatAgent.IsStarted())
+        {
+            mBleState = kNotAdvertising;
+            IgnoreError(UpdateAdvertisingForTcat());
+        }
     }
 
     // Update advertisement
@@ -250,7 +281,7 @@ Error BleSecure::SendApplicationTlv(MeshCoP::TcatAgent::TcatApplicationProtocol 
         ot::Tlv tlv;
 
         tlv.SetType(static_cast<uint8_t>(aTcatApplicationProtocol));
-        tlv.SetLength((uint8_t)aLength);
+        tlv.SetLength(static_cast<uint8_t>(aLength));
         SuccessOrExit(error = Send(reinterpret_cast<uint8_t *>(&tlv), sizeof(tlv)));
     }
 
@@ -399,11 +430,7 @@ void BleSecure::HandleTlsConnectEvent(MeshCoP::Tls::ConnectEvent aEvent)
         mReceivedMessage = nullptr;
         FreeMessage(mSendMessage);
         mSendMessage = nullptr;
-
-        if (mTcatAgent.IsEnabled())
-        {
-            mTcatAgent.Disconnected();
-        }
+        mTcatAgent.Disconnected();
     }
 
     mConnectCallback.InvokeIfSet(&GetInstance(), aEvent == MeshCoP::Tls::kConnected, true);
@@ -446,7 +473,7 @@ void BleSecure::HandleTlsReceive(uint8_t *aBuf, uint16_t aLength)
                 }
                 else
                 {
-                    SuccessOrExit(mReceivedMessage->AppendBytes(aBuf, (uint16_t)missingBytes));
+                    SuccessOrExit(mReceivedMessage->AppendBytes(aBuf, static_cast<uint16_t>(missingBytes)));
                     aLength -= missingBytes;
                     aBuf += missingBytes;
                 }
@@ -479,9 +506,8 @@ void BleSecure::HandleTlsReceive(uint8_t *aBuf, uint16_t aLength)
                 continue;
             }
 
-            // TLV fully loaded
-
-            if (mTcatAgent.IsEnabled())
+            // TLV fully loaded - let TCAT agent handle it, if connected
+            if (mTcatAgent.IsConnected())
             {
                 Error error = kErrorNone;
 
@@ -508,8 +534,8 @@ void BleSecure::HandleTlsReceive(uint8_t *aBuf, uint16_t aLength)
             }
             else
             {
-                mReceivedMessage->SetOffset((uint16_t)offset);
-                mReceiveCallback.InvokeIfSet(&GetInstance(), mReceivedMessage, (int32_t)offset,
+                mReceivedMessage->SetOffset(static_cast<uint16_t>(offset));
+                mReceiveCallback.InvokeIfSet(&GetInstance(), mReceivedMessage, static_cast<int32_t>(offset),
                                              OT_TCAT_APPLICATION_PROTOCOL_NONE);
             }
 
@@ -583,6 +609,28 @@ Error BleSecure::HandleTransport(ot::Message &aMessage)
     }
 
     aMessage.Free();
+exit:
+    return error;
+}
+
+Error BleSecure::UpdateAdvertisingForTcat(void)
+{
+    Error error = kErrorNone;
+
+    if (mTcatAgent.NeedsToAdvertise() && mBleState == kNotAdvertising)
+    {
+        SuccessOrExit(error = otPlatBleGapAdvStart(&GetInstance(), OT_BLE_ADV_INTERVAL_DEFAULT));
+        mBleState = kAdvertising;
+    }
+    else if (!mTcatAgent.NeedsToAdvertise() && (mBleState == kAdvertising || mBleState == kConnected))
+    {
+        SuccessOrExit(error = otPlatBleGapAdvStop(&GetInstance()));
+        if (mBleState == kAdvertising)
+        {
+            mBleState = kNotAdvertising;
+        }
+    }
+
 exit:
     return error;
 }
