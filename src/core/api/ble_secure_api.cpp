@@ -67,6 +67,11 @@ otError otBleSecureTcatStart(otInstance *aInstance, otHandleTcatJoin aHandler)
 
 void otBleSecureStop(otInstance *aInstance) { AsCoreType(aInstance).Get<Ble::BleSecure>().Stop(); }
 
+otError otBleSecureTcatStandby(otInstance *aInstance)
+{
+    return AsCoreType(aInstance).Get<Ble::BleSecure>().TcatStandby();
+}
+
 #ifdef MBEDTLS_KEY_EXCHANGE_PSK_ENABLED
 void otBleSecureSetPsk(otInstance    *aInstance,
                        const uint8_t *aPsk,

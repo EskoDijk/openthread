@@ -104,7 +104,7 @@ public:
      *
      * @retval kErrorNone           Successfully started the BLE Secure Joiner role.
      * @retval kErrorInvalidArgs    The aVendorInfo is invalid.
-     * @retval kErrorInvaidState    The BLE function has not been started or line mode is not selected.
+     * @retval kErrorInvalidState   The BLE function has not been started or line mode is not selected.
      */
     Error TcatStart(MeshCoP::TcatAgent::JoinCallback aHandler);
 
@@ -122,6 +122,14 @@ public:
      * Stops the secure BLE agent.
      */
     void Stop(void);
+
+    /**
+     * Sets the TCAT protocol over BLE Secure into standby state.
+     *
+     * @retval kErrorNone           Successfully set TCAT over BLE Secure to standby.
+     * @retval kErrorInvalidState   TCAT is not in a state that can transition to standby.
+     */
+    Error TcatStandby();
 
     /**
      * Initializes TLS session with a peer using an already open BLE connection.

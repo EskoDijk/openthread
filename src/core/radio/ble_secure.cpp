@@ -135,6 +135,18 @@ exit:
     return;
 }
 
+Error BleSecure::TcatStandby()
+{
+    Error error;
+
+    VerifyOrExit(mBleState != kStopped, error = kErrorInvalidState);
+
+    error = mTcatAgent.Standby();
+
+exit:
+    return error;
+}
+
 Error BleSecure::Connect(void)
 {
     Ip6::SockAddr sockaddr;
@@ -365,11 +377,7 @@ void BleSecure::HandleTlsConnectEvent(MeshCoP::Tls::ConnectEvent aEvent)
         mReceivedMessage = nullptr;
         FreeMessage(mSendMessage);
         mSendMessage = nullptr;
-
-        if (mTcatAgent.IsEnabled())
-        {
-            mTcatAgent.Disconnected();
-        }
+        mTcatAgent.Disconnected();
     }
 
     mConnectCallback.InvokeIfSet(&GetInstance(), aEvent == MeshCoP::Tls::kConnected, true);

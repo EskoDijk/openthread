@@ -236,12 +236,14 @@ public:
     };
 
     /**
-     * Represents TCAT status.
+     * Represents TCAT state.
      */
     enum State : uint8_t
     {
         kStateDisabled,
+        kStateStandby,
         kStateEnabled,
+        kStateEnabledTemporary,
         kStateConnected,
     };
 
@@ -265,21 +267,53 @@ public:
     explicit TcatAgent(Instance &aInstance);
 
     /**
-     * Enables the TCAT agent.
+     * Starts the TCAT agent and enables TCAT operation.
+     *
+     * State transitions to kStateEnabled, which sends TCAT Advertisements and allows connections
+     * from TCAT Commissioners.
      *
      * @param[in] aAppDataReceiveCallback   A pointer to a function that is called when the user data is received.
      * @param[in] aHandler                  A pointer to a function that is called when the join operation completes.
      * @param[in] aContext                  A context pointer.
      *
      * @retval kErrorNone        Successfully started the TCAT agent.
-     * @retval kErrorFailed      Failed to start due to missing vendor info.
+     * @retval kErrorFailed      Failed to start due to missing vendor info. This must be set with
+     *                           SetTcatVendorInfo().
      */
     Error Start(AppDataReceiveCallback aAppDataReceiveCallback, JoinCallback aHandler, void *aContext);
 
     /**
      * Stops the TCAT agent.
+     *
+     * State transitions to kStateDisabled. TCAT can only be activated again via Start().
+     * Any ongoing TCAT Commissioner connections are interrupted.
      */
     void Stop(void);
+
+    /**
+     * Sets the TCAT agent to standby state.
+     *
+     * State transitions to kStateStandby. The callback information from Start() is retained.
+     * In this state, TCAT Advertisements are not sent and new TCAT Commissioners cannot connect.
+     * TCAT can be activated again via EnableTcat() or via an activation TMF message (to be added
+     * in the future).
+     *
+     * @retval kErrorNode         Successfully set the TCAT agent to standby mode.
+     * @retval kErrorInvalidState If not in a suitable state to transition to standby.
+     */
+    Error Standby(void);
+
+    /**
+     * Sets the TCAT agent to enabled state.
+     *
+     * State transitions to kStateEnabled. In this state, TCAT Advertisements are sent
+     * and TCAT Commissioners are able to connect. From here, TCAT can be set to standby
+     * again using Standby().
+     *
+     * @retval kErrorNode         Successfully set the TCAT agent to standby mode.
+     * @retval kErrorInvalidState If not in a suitable state to transition to standby.
+     */
+    Error EnableTcat(void);
 
     /**
      * Set the TCAT Vendor Info object
@@ -289,10 +323,13 @@ public:
     Error SetTcatVendorInfo(const VendorInfo &aVendorInfo);
 
     /**
-     * Indicates whether or not the TCAT agent is enabled.
+     * Indicates whether or not the TCAT agent is enabled using Start().
      *
-     * @retval TRUE   The TCAT agent is enabled.
-     * @retval FALSE  The TCAT agent is not enabled.
+     * Any state other than kStateDisabled indicates it is started. Depending on the details
+     * of the state, the TCAT features may be activated or inactive.
+     *
+     * @retval TRUE   The TCAT agent is started.
+     * @retval FALSE  The TCAT agent is not started.
      */
     bool IsEnabled(void) const { return mState != kStateDisabled; }
 
@@ -402,6 +439,7 @@ private:
     ExtendedPanId                    mCommissionerExtendedPanId;
     char                             mCurrentServiceName[OT_TCAT_MAX_SERVICE_NAME_LENGTH + 1];
     State                            mState;
+    State                            mNextState;
     bool                             mCommissionerHasNetworkName : 1;
     bool                             mCommissionerHasDomainName : 1;
     bool                             mCommissionerHasExtendedPanId : 1;

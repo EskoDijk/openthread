@@ -58,6 +58,7 @@ TcatAgent::TcatAgent(Instance &aInstance)
     , mVendorInfo(nullptr)
     , mCurrentApplicationProtocol(kApplicationProtocolNone)
     , mState(kStateDisabled)
+    , mNextState(kStateDisabled)
     , mCommissionerHasNetworkName(false)
     , mCommissionerHasDomainName(false)
     , mCommissionerHasExtendedPanId(false)
@@ -92,6 +93,7 @@ void TcatAgent::Stop(void)
 {
     mCurrentApplicationProtocol = kApplicationProtocolNone;
     mState                      = kStateDisabled;
+    mNextState                  = kStateDisabled;
     mAppDataReceiveCallback.Clear();
     mJoinCallback.Clear();
     mRandomChallenge     = 0;
@@ -99,6 +101,42 @@ void TcatAgent::Stop(void)
     mPskcVerified        = false;
     mInstallCodeVerified = false;
     LogInfo("TCAT agent stopped");
+}
+
+Error TcatAgent::Standby(void)
+{
+    Error error = kErrorNone;
+
+    VerifyOrExit(IsEnabled() && !IsConnected(), error = kErrorInvalidState);
+    mCurrentApplicationProtocol = kApplicationProtocolNone;
+    mState                      = kStateStandby;
+    mRandomChallenge     = 0;
+    mPskdVerified        = false;
+    mPskcVerified        = false;
+    mInstallCodeVerified = false;
+    LogInfo("TCAT agent standby");
+
+exit:
+    LogWarnOnError(error, "standby TCAT agent");
+    return error;
+}
+
+Error TcatAgent::EnableTcat(void)
+{
+    Error error = kErrorNone;
+
+    VerifyOrExit(IsEnabled(), error = kErrorInvalidState);
+    if (IsConnected())
+    {
+        mNextState = kStateEnabled;
+    }else{
+        mState = kStateEnabled;
+    }
+    LogInfo("TCAT agent enabled");
+
+exit:
+    LogWarnOnError(error, "enable TCAT agent");
+    return error;
 }
 
 Error TcatAgent::SetTcatVendorInfo(const VendorInfo &aVendorInfo)
@@ -118,7 +156,7 @@ Error TcatAgent::Connected(MeshCoP::Tls::Extension &aTls)
     size_t len;
     Error  error;
 
-    VerifyOrExit(IsEnabled(), error = kErrorInvalidState);
+    VerifyOrExit(IsEnabled() && !IsConnected() && mState != kStateStandby, error = kErrorInvalidState);
     len = sizeof(mCommissionerAuthorizationField);
     SuccessOrExit(
         error = aTls.GetThreadAttributeFromPeerCertificate(
@@ -164,6 +202,7 @@ Error TcatAgent::Connected(MeshCoP::Tls::Extension &aTls)
 
     mCurrentApplicationProtocol = kApplicationProtocolNone;
     mCurrentServiceName[0]      = 0;
+    mNextState                  = mState;  // ensure to return to prior state, upon disconnect.
     mState                      = kStateConnected;
     LogInfo("TCAT agent connected");
 
@@ -177,7 +216,12 @@ void TcatAgent::Disconnected(void)
 
     if (mState != kStateDisabled)
     {
-        mState = kStateEnabled;
+        // Any temporary enablement stops after disconnect.
+        if (mNextState == kStateEnabled) {
+            mState = kStateEnabled;
+        } else {
+            mState = kStateStandby;
+        }
     }
 
     mRandomChallenge     = 0;

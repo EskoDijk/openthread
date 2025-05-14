@@ -122,14 +122,31 @@ otError otBleSecureSetTcatVendorInfo(otInstance *aInstance, const otTcatVendorIn
  * @param[in]  aInstance         A pointer to an OpenThread instance.
  * @param[in]  aHandler          A pointer to a function that is called when the join operation completes.
  *
- * @retval OT_ERROR_NONE              Successfully started the BLE Secure Joiner role.
- * @retval OT_ERROR_INVALID_ARGS      @p aElevationPsk or @p aVendorInfo is invalid.
- * @retval OT_ERROR_INVALID_STATE     The BLE function has not been started or line mode is not selected.
+ * @retval OT_ERROR_NONE              Successfully started TCAT over BLE Secure.
+ * @retval OT_ERROR_INVALID_ARGS      @p aVendorInfo is invalid.
+ * @retval OT_ERROR_INVALID_STATE     TCAT/BLE has not been started or line mode is not selected.
  */
 otError otBleSecureTcatStart(otInstance *aInstance, otHandleTcatJoin aHandler);
 
 /**
+ * Sets the TCAT protocol over BLE Secure to standby state.
+ *
+ * In standby state, no BLE advertisements are sent and TCAT Commissioners can't connect.
+ * TCAT can be automatically enabled via a TMF message while in standby.
+ *
+ * @param[in]  aInstance         A pointer to an OpenThread instance.
+ *
+ * @retval OT_ERROR_NONE              Successfully started TCAT over BLE Secure.
+ * @retval OT_ERROR_INVALID_STATE     TCAT is not yet started, or not in a state from which it can
+ *                                    transition to standby.
+ */
+otError otBleSecureTcatStandby(otInstance *aInstance);
+
+/**
  * Stops the BLE Secure server.
+ *
+ * In disabled state, TCAT is not active. It cannot be automatically enabled in any way.
+ * otBleSecureTcatStart is required again to start TCAT over BLE Secure.
  *
  * @param[in]  aInstance  A pointer to an OpenThread instance.
  */
