@@ -63,18 +63,20 @@ namespace MeshCoP {
 
 class TcatAgent : public InstanceLocator, private NonCopyable
 {
+    friend class Ble::BleSecure;
+
 public:
     /**
      * Pointer to call when application data was received over the TLS connection.
      *
-     *  Please see otHandleTcatApplicationDataReceive for details.
+     *  Please see #otHandleTcatApplicationDataReceive for details.
      */
     typedef otHandleTcatApplicationDataReceive AppDataReceiveCallback;
 
     /**
      * Pointer to call to notify the completion of a join operation.
      *
-     * Please see otHandleTcatJoin for details.
+     * Please see #otHandleTcatJoin for details.
      */
     typedef otHandleTcatJoin JoinCallback;
 
@@ -115,9 +117,8 @@ public:
     };
 
     /**
-     *
      * Represents a data structure for storing TCAT Commissioner authorization information in the
-     * certificate ASN.1 field 1.3.6.1.4.1.44970.3.
+     * certificate ASN.1 OID field 1.3.6.1.4.1.44970.3.
      */
     OT_TOOL_PACKED_BEGIN
     struct CertificateAuthorizationField
@@ -168,16 +169,16 @@ public:
         kTlvRequestPskdHash           = 0x14, ///< TCAT PSKd hash request TLV
 
         // Command Class Commissioning
-        kTlvSetActiveOperationalDataset            = 0x20, ///< TCAT active operational dataset TLV
-        kTlvSetActiveOperationalDatasetAlternative = 0x21, ///< TCAT active operational dataset alternative #1 TLV
-        kTlvGetCommissionerCertificate             = 0x25, ///< TCAT commissioner certificate query TLV
-        kTlvGetDiagnosticTlvs                      = 0x26, ///< TCAT diagnostics TLVs query TLV
-        kTlvStartThreadInterface                   = 0x27, ///< TCAT start thread interface request TLV
-        kTlvStopThreadInterface                    = 0x28, ///< TCAT stop thread interface request TLV
+        kTlvSetActiveOperationalDataset    = 0x20, ///< TCAT active operational dataset TLV
+        kTlvSetActiveOperationalDatasetAlt = 0x21, ///< TCAT active operational dataset alternative #1 TLV (reserved)
+        kTlvGetCommissionerCertificate     = 0x25, ///< TCAT commissioner certificate query TLV
+        kTlvGetDiagnosticTlvs              = 0x26, ///< TCAT diagnostics TLVs query TLV
+        kTlvStartThreadInterface           = 0x27, ///< TCAT start thread interface request TLV
+        kTlvStopThreadInterface            = 0x28, ///< TCAT stop thread interface request TLV
 
         // Command Class Extraction
-        kTlvGetActiveOperationalDataset            = 0x40, ///< TCAT active oerational dataset query TLV
-        kTlvGetActiveOperationalDatasetAlternative = 0x41, ///< TCAT active oerational dataset alternative #1 query TLV
+        kTlvGetActiveOperationalDataset    = 0x40, ///< TCAT active oerational dataset query TLV
+        kTlvGetActiveOperationalDatasetAlt = 0x41, ///< TCAT active oerational dataset alternative #1 query TLV (rsv)
 
         // Command Class Decommissioning
         kTlvDecommission = 0x60, ///< TCAT decommission request TLV
@@ -193,9 +194,9 @@ public:
         kTlvSendVendorSpecificData = 0x9F, ///< TCAT send vendor specific command or data TLV
 
         // Command Class CCM
-        kTlvSetLDevIdOperationalCert = 0xA0, ///< TCAT LDevID operational certificate TLV
-        kTlvSetLDevIdPrivateKey      = 0xA1, ///< TCAT LDevID operational certificate pricate key TLV
-        kTlvSetDomainCaCert          = 0xA2, ///< TCAT domain CA certificate TLV
+        kTlvSetLDevIdOperationalCert = 0xA0, ///< TCAT set LDevID operational certificate TLV (reserved)
+        kTlvSetLDevIdPrivateKey      = 0xA1, ///< TCAT set LDevID operational certificate private key TLV (reserved)
+        kTlvSetDomainCaCert          = 0xA2, ///< TCAT set domain CA certificate TLV (reserved)
     };
 
     /**
@@ -250,13 +251,15 @@ public:
     };
 
     /**
-     * Represents TCAT status.
+     * Represents TCAT agent state.
      */
     enum State : uint8_t
     {
-        kStateDisabled,
-        kStateEnabled,
-        kStateConnected,
+        kStateDisabled,        // TCAT not initialized - can only be enabled by the local application
+        kStateStandby,         // TCAT initialized, waiting for activation by local app or via TMF, no advertisements
+        kStateActive,          // TCAT active to receive a connection, TCAT advertisements sent
+        kStateActiveTemporary, // Like Active, but after a time period, will go back to Standby
+        kStateConnected,       // TCAT Commissioner is currently connected
     };
 
     /**
@@ -279,21 +282,64 @@ public:
     explicit TcatAgent(Instance &aInstance);
 
     /**
-     * Enables the TCAT agent.
+     * Starts/initializes the TCAT agent and activates TCAT functions.
+     *
+     * State transitions to kStateEnabled, TCAT Advertisements are sent, and connections
+     * from TCAT Commissioners are allowed.
+     * After Start(), optionally #Standby() can be used to immediately set the agent to standby mode.
      *
      * @param[in] aAppDataReceiveCallback   A pointer to a function that is called when the user data is received.
      * @param[in] aHandler                  A pointer to a function that is called when the join operation completes.
      * @param[in] aContext                  A context pointer.
      *
      * @retval kErrorNone        Successfully started the TCAT agent.
-     * @retval kErrorFailed      Failed to start due to missing vendor info.
+     * @retval kErrorFailed      Failed to start due to missing vendor info. This must be set with
+     *                           #SetTcatVendorInfo().
      */
     Error Start(AppDataReceiveCallback aAppDataReceiveCallback, JoinCallback aHandler, void *aContext);
 
     /**
      * Stops the TCAT agent.
+     *
+     * State transitions to kStateDisabled. TCAT can only be enabled again via Start().
+     * Any ongoing TCAT Commissioner connections are forcibly interrupted and any scheduled
+     * activations are cleared.
      */
     void Stop(void);
+
+    /**
+     * Sets the TCAT agent to standby state, deactivating TCAT functions.
+     *
+     * State transitions to kStateStandby. The callback information from Start() is retained.
+     * In this state, TCAT Advertisements are not sent and new TCAT Commissioners cannot connect.
+     * However, any existing connected TCAT Commissioner remains connected, postponing the
+     * standby until this connection finalizes.
+     *
+     * TCAT can be activated again via Activate() or by receiving a TCAT_ENABLE.req TMF message.
+     *
+     * @retval kErrorNone         Successfully set the TCAT agent to kStateStandby, OR scheduled
+     *                            to standby after the current connection closes.
+     * @retval kErrorInvalidState If not in a suitable state to transition to kStateStandby.
+     */
+    Error Standby(void);
+
+    /**
+     * Activate TCAT functions of the TCAT agent.
+     *
+     * This requires the TCAT agent to be already started.
+     * The state transitions to kStateActive. In this state, TCAT Advertisements are actively sent
+     * and TCAT Commissioners are able to connect. From here, TCAT can be set to standby
+     * again using Standby().
+     * If a connection is ongoing, this call will ensure that kStateActive will
+     * be kept after this connection is finished.
+     * This function will override any ongoing temporary activation of TCAT, or any
+     * previously scheduled activation for a future time.
+     *
+     * @retval kErrorNone         Successfully set the TCAT agent to kStateActive now, OR scheduled
+     *                            for going to kStateActive after the current connection will finish.
+     * @retval kErrorInvalidState If not in a suitable state to transition to kStateActive.
+     */
+    Error Activate(void);
 
     /**
      * Set the TCAT Vendor Info object
@@ -303,12 +349,15 @@ public:
     Error SetTcatVendorInfo(const VendorInfo &aVendorInfo);
 
     /**
-     * Indicates whether or not the TCAT agent is enabled.
+     * Indicates whether or not the TCAT agent has been started using Start().
      *
-     * @retval TRUE   The TCAT agent is enabled.
-     * @retval FALSE  The TCAT agent is not enabled.
+     * Any state other than kStateDisabled indicates it is started. Depending on the details
+     * of TcatAgent::State, the TCAT features offered by the agent may either be active or inactive.
+     *
+     * @retval TRUE   The TCAT agent is started.
+     * @retval FALSE  The TCAT agent is not started.
      */
-    bool IsEnabled(void) const { return mState != kStateDisabled; }
+    bool IsStarted(void) const { return mState != kStateDisabled; }
 
     /**
      * Indicates whether or not the TCAT agent is connected.
@@ -346,10 +395,11 @@ public:
      * @retval FALSE The install code was not verified.
      */
     bool GetInstallCodeVerifyStatus(void) const { return mInstallCodeVerified; }
-    bool GetApplicationResponsePending(void) { return mApplicationResponsePending; }
+    bool GetApplicationResponsePending(void) const { return mApplicationResponsePending; }
     void NotifyApplicationResponseSent(void) { mApplicationResponsePending = false; }
 
 private:
+    void  ClearCommissionerState();
     Error Connected(MeshCoP::Tls::Extension &aTls);
     void  Disconnected(void);
 
@@ -401,7 +451,6 @@ private:
                                                 Dataset          *aDataset) const;
     uint8_t CheckAuthorizationRequirements(CommandClassFlags aFlagsChecked, Dataset::Info *aDatasetInfo) const;
 
-    static constexpr uint16_t kJoinerUdpPort             = OPENTHREAD_CONFIG_JOINER_UDP_PORT;
     static constexpr uint16_t kPingPayloadMaxLength      = 512;
     static constexpr uint16_t kProvisioningUrlMaxLength  = 64;
     static constexpr uint16_t kMaxPskdLength             = OT_JOINER_MAX_PSKD_LENGTH;
@@ -412,7 +461,6 @@ private:
     static constexpr uint8_t  kServiceNameMaxLength      = OT_TCAT_SERVICE_NAME_MAX_LENGTH;
     static constexpr uint8_t  kApplicationLayerMaxCount  = OT_TCAT_APPLICATION_LAYER_MAX_COUNT;
 
-    JoinerPskd                       mJoinerPskd;
     const VendorInfo                *mVendorInfo;
     Callback<JoinCallback>           mJoinCallback;
     Callback<AppDataReceiveCallback> mAppDataReceiveCallback;
@@ -422,6 +470,7 @@ private:
     NetworkName                      mCommissionerDomainName;
     ExtendedPanId                    mCommissionerExtendedPanId;
     State                            mState;
+    State                            mNextState;
     bool                             mCommissionerHasNetworkName : 1;
     bool                             mCommissionerHasDomainName : 1;
     bool                             mCommissionerHasExtendedPanId : 1;
@@ -431,8 +480,6 @@ private:
     bool                             mInstallCodeVerified : 1;
     bool                             mIsCommissioned : 1;
     bool                             mApplicationResponsePending : 1;
-
-    friend class Ble::BleSecure;
 };
 
 } // namespace MeshCoP

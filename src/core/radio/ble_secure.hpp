@@ -104,7 +104,7 @@ public:
      *
      * @retval kErrorNone           Successfully started the BLE Secure Joiner role.
      * @retval kErrorInvalidArgs    The aVendorInfo is invalid.
-     * @retval kErrorInvaidState    The BLE function has not been started or line mode is not selected.
+     * @retval kErrorInvalidState   The BLE function has not been started or line mode is not selected.
      */
     Error TcatStart(MeshCoP::TcatAgent::JoinCallback aHandler);
 
@@ -122,6 +122,16 @@ public:
      * Stops the secure BLE agent.
      */
     void Stop(void);
+
+    /**
+     * Sets the TCAT functions over BLE Secure into active or standby state.
+     *
+     * @param[in] aActive     TRUE to activate TCAT functions, FALSE to set to standby.
+     *
+     * @retval kErrorNone           Successfully set TCAT over BLE Secure to standby.
+     * @retval kErrorInvalidState   TCAT is not in a state that can transition to standby.
+     */
+    Error TcatActive(bool aActive);
 
     /**
      * Initializes TLS session with a peer using an already open BLE connection.
@@ -152,12 +162,12 @@ public:
     bool IsConnected(void) const { return mTls.IsConnected(); }
 
     /**
-     * Indicates whether or not the TCAT agent is enabled.
+     * Indicates whether or not the TCAT agent is started.
      *
-     * @retval TRUE   The TCAT agent is enabled.
-     * @retval FALSE  The TCAT agent is not enabled.
+     * @retval TRUE   The TCAT agent is started.
+     * @retval FALSE  The TCAT agent is disabled.
      */
-    bool IsTcatEnabled(void) const { return mTcatAgent.IsEnabled(); }
+    bool IsTcatAgentStarted(void) const { return mTcatAgent.IsStarted(); }
 
     /**
      * Indicates whether or not a TCAT command class is authorized for use.

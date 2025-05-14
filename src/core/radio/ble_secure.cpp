@@ -115,7 +115,7 @@ void BleSecure::Stop(void)
     mBleState = kStopped;
     mMtuSize  = kInitialMtuSize;
 
-    if (mTcatAgent.IsEnabled())
+    if (mTcatAgent.IsStarted())
     {
         mTcatAgent.Stop();
     }
@@ -134,6 +134,18 @@ void BleSecure::Stop(void)
 
 exit:
     return;
+}
+
+Error BleSecure::TcatActive(bool aActive)
+{
+    Error error;
+    // TODO: independent activation from BLE.
+    VerifyOrExit(mBleState != kStopped, error = kErrorInvalidState);
+
+    error = mTcatAgent.Standby();
+
+exit:
+    return error;
 }
 
 Error BleSecure::Connect(void)
@@ -399,11 +411,7 @@ void BleSecure::HandleTlsConnectEvent(MeshCoP::Tls::ConnectEvent aEvent)
         mReceivedMessage = nullptr;
         FreeMessage(mSendMessage);
         mSendMessage = nullptr;
-
-        if (mTcatAgent.IsEnabled())
-        {
-            mTcatAgent.Disconnected();
-        }
+        mTcatAgent.Disconnected();
     }
 
     mConnectCallback.InvokeIfSet(&GetInstance(), aEvent == MeshCoP::Tls::kConnected, true);
@@ -479,9 +487,8 @@ void BleSecure::HandleTlsReceive(uint8_t *aBuf, uint16_t aLength)
                 continue;
             }
 
-            // TLV fully loaded
-
-            if (mTcatAgent.IsEnabled())
+            // TLV fully loaded - let TCAT agent handle it, if connected
+            if (mTcatAgent.IsConnected())
             {
                 Error error = kErrorNone;
 

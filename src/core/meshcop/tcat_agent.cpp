@@ -59,40 +59,15 @@ TcatAgent::TcatAgent(Instance &aInstance)
     : InstanceLocator(aInstance)
     , mVendorInfo(nullptr)
     , mState(kStateDisabled)
-    , mCommissionerHasNetworkName(false)
-    , mCommissionerHasDomainName(false)
-    , mCommissionerHasExtendedPanId(false)
-    , mRandomChallenge(0)
-    , mPskdVerified(false)
-    , mPskcVerified(false)
-    , mInstallCodeVerified(false)
-    , mIsCommissioned(false)
-    , mApplicationResponsePending(false)
+    , mNextState(kStateDisabled)
 {
-    mJoinerPskd.Clear();
+    ClearCommissionerState();
 }
 
-Error TcatAgent::Start(AppDataReceiveCallback aAppDataReceiveCallback, JoinCallback aHandler, void *aContext)
+void TcatAgent::ClearCommissionerState(void)
 {
-    Error error = kErrorNone;
-
-    LogInfo("Starting");
-    VerifyOrExit(mVendorInfo != nullptr, error = kErrorFailed);
-    mAppDataReceiveCallback.Set(aAppDataReceiveCallback, aContext);
-    mJoinCallback.Set(aHandler, aContext);
-    mRandomChallenge = 0;
-    mState           = kStateEnabled;
-
-exit:
-    LogWarnOnError(error, "start TCAT agent");
-    return error;
-}
-
-void TcatAgent::Stop(void)
-{
-    mState = kStateDisabled;
-    mAppDataReceiveCallback.Clear();
-    mJoinCallback.Clear();
+    mCommissionerAuthorizationField = {};
+    mCommissionerExtendedPanId.Clear();
     mCommissionerHasNetworkName    = false;
     mCommissionerHasDomainName     = false;
     mCommissionerHasExtendedPanId  = false;
@@ -103,15 +78,83 @@ void TcatAgent::Stop(void)
     mPskcVerified                  = false;
     mInstallCodeVerified           = false;
     mIsCommissioned                = false;
-    LogInfo("TCAT agent stopped");
+    mApplicationResponsePending    = false;
+}
+
+Error TcatAgent::Start(AppDataReceiveCallback aAppDataReceiveCallback, JoinCallback aHandler, void *aContext)
+{
+    Error error = kErrorNone;
+
+    LogInfo("Starting");
+    VerifyOrExit(mVendorInfo != nullptr, error = kErrorFailed);
+    mAppDataReceiveCallback.Set(aAppDataReceiveCallback, aContext);
+    mJoinCallback.Set(aHandler, aContext);
+    mState           = kStateActive;
+
+exit:
+    LogWarnOnError(error, "TCAT agent start");
+    return error;
+}
+
+void TcatAgent::Stop(void)
+{
+    if (IsConnected())
+    {
+        // FIXME disconnect current client
+    }
+    mState     = kStateDisabled;
+    mNextState = kStateDisabled;
+    mAppDataReceiveCallback.Clear();
+    mJoinCallback.Clear();
+    ClearCommissionerState();
+    LogInfo("TCAT agent stop");
+}
+
+Error TcatAgent::Standby(void)
+{
+    Error error = kErrorNone;
+
+    VerifyOrExit(IsStarted(), error = kErrorInvalidState);
+    if (IsConnected())
+    {
+        // if already connected, only move to 'standby' once the connection is done.
+        mNextState = kStateStandby;
+    }else{
+        mState = kStateStandby;
+    }
+    LogInfo("TCAT agent standby");
+
+exit:
+    LogWarnOnError(error, "TCAT agent standby");
+    return error;
+}
+
+Error TcatAgent::Activate(void)
+{
+    Error error = kErrorNone;
+
+    VerifyOrExit(IsStarted(), error = kErrorInvalidState);
+    if (IsConnected())
+    {
+        // if already connected, only move to 'enabled' once the connection is done.
+        mNextState = kStateActive;
+    }else{
+        mState = kStateActive;
+    }
+    LogInfo("TCAT agent active");
+
+exit:
+    LogWarnOnError(error, "TCAT agent enable");
+    return error;
 }
 
 Error TcatAgent::SetTcatVendorInfo(const VendorInfo &aVendorInfo)
 {
     Error error = kErrorNone;
+    JoinerPskd pskd;
 
     VerifyOrExit(aVendorInfo.IsValid(), error = kErrorInvalidArgs);
-    SuccessOrExit(error = mJoinerPskd.SetFrom(aVendorInfo.mPskdString));
+    SuccessOrExit(error = pskd.SetFrom(aVendorInfo.mPskdString));
     mVendorInfo = &aVendorInfo;
 
 exit:
@@ -123,7 +166,9 @@ Error TcatAgent::Connected(MeshCoP::Tls::Extension &aTls)
     size_t len;
     Error  error;
 
-    VerifyOrExit(IsEnabled(), error = kErrorInvalidState);
+    VerifyOrExit(IsStarted() && !IsConnected() && mState != kStateStandby, error = kErrorInvalidState);
+    ClearCommissionerState();
+
     len = sizeof(mCommissionerAuthorizationField);
     SuccessOrExit(
         error = aTls.GetThreadAttributeFromPeerCertificate(
@@ -136,10 +181,6 @@ Error TcatAgent::Connected(MeshCoP::Tls::Extension &aTls)
                       kCertificateAuthorizationField, reinterpret_cast<uint8_t *>(&mDeviceAuthorizationField), &len));
     VerifyOrExit(len == sizeof(mDeviceAuthorizationField), error = kErrorParse);
     VerifyOrExit((mDeviceAuthorizationField.mHeader & kCommissionerFlag) == 0, error = kErrorParse);
-
-    mCommissionerHasDomainName    = false;
-    mCommissionerHasNetworkName   = false;
-    mCommissionerHasExtendedPanId = false;
 
     len = sizeof(mCommissionerDomainName) - 1;
     if (aTls.GetThreadAttributeFromPeerCertificate(
@@ -167,7 +208,9 @@ Error TcatAgent::Connected(MeshCoP::Tls::Extension &aTls)
         }
     }
 
+    mNextState      = mState;  // used to return to prior state, upon disconnect.
     mState          = kStateConnected;
+    // This specifically stores the state IsCommissioned at _start_ of session:
     mIsCommissioned = Get<ActiveDatasetManager>().IsCommissioned();
     LogInfo("TCAT agent connected");
 
@@ -179,15 +222,16 @@ void TcatAgent::Disconnected(void)
 {
     if (mState != kStateDisabled)
     {
-        mState = kStateEnabled;
+        // Any temporary enablement stops after disconnect.
+        if (mNextState == kStateActive) {
+            mState = kStateActive;
+        } else {
+            mState = kStateStandby;
+        }
     }
 
-    mRandomChallenge     = 0;
-    mPskdVerified        = false;
-    mPskcVerified        = false;
-    mInstallCodeVerified = false;
-
-    LogInfo("TCAT agent disconnected");
+    ClearCommissionerState();
+    LogInfo("TCAT agent disconnect");
 }
 
 uint8_t TcatAgent::CheckAuthorizationRequirements(CommandClassFlags aFlagsRequired, Dataset::Info *aDatasetInfo) const
@@ -342,7 +386,7 @@ bool TcatAgent::IsCommandClassAuthorized(CommandClass aCommandClass) const
 
 Error TcatAgent::HandleSingleTlv(const Message &aIncomingMessage, Message &aOutgoingMessage)
 {
-    Error    error = kErrorParse;
+    Error    error;
     ot::Tlv  tlv;
     uint16_t offset = aIncomingMessage.GetOffset();
     uint16_t length;

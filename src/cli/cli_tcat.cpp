@@ -407,6 +407,40 @@ template <> otError Tcat::Process<Cmd("stop")>(Arg aArgs[])
     return OT_ERROR_NONE;
 }
 
+/**
+ * @cli tcat standby
+ * @code
+ * tcat standby
+ * Done
+ * @endcode
+ * @par
+ * Sets TCAT operation to standby.
+ * @sa otBleSecureTcatActive
+ */
+template <> otError Tcat::Process<Cmd("standby")>(Arg aArgs[])
+{
+    OT_UNUSED_VARIABLE(aArgs);
+
+    return otBleSecureTcatActive(GetInstancePtr(), false);
+}
+
+/**
+ * @cli tcat active
+ * @code
+ * tcat active
+ * Done
+ * @endcode
+ * @par
+ * Sets TCAT operation to active.
+ * @sa otBleSecureTcatActive
+ */
+template <> otError Tcat::Process<Cmd("active")>(Arg aArgs[])
+{
+    OT_UNUSED_VARIABLE(aArgs);
+
+    return otBleSecureTcatActive(GetInstancePtr(), true);
+}
+
 otError Tcat::Process(Arg aArgs[])
 {
 #define CmdEntry(aCommandString)                            \
@@ -414,19 +448,19 @@ otError Tcat::Process(Arg aArgs[])
         aCommandString, &Tcat::Process<Cmd(aCommandString)> \
     }
 
-    static constexpr Command kCommands[] = {CmdEntry("advid"), CmdEntry("devid"), CmdEntry("start"), CmdEntry("stop")};
+    static constexpr Command kCommands[] = {CmdEntry("active"),CmdEntry("advid"), CmdEntry("devid"), CmdEntry("standby"), CmdEntry("start"), CmdEntry("stop")};
 
     static_assert(BinarySearch::IsSorted(kCommands), "kCommands is not sorted");
 
 #undef CmdEntry
 
-    otError        error = OT_ERROR_NONE;
+    otError        error = OT_ERROR_INVALID_COMMAND;
     const Command *command;
 
     if (aArgs[0].IsEmpty() || (aArgs[0] == "help"))
     {
         OutputCommandTable(kCommands);
-        ExitNow(error = aArgs[0].IsEmpty() ? error : OT_ERROR_NONE);
+        ExitNow(error = OT_ERROR_NONE);
     }
 
     command = BinarySearch::Find(aArgs[0].GetCString(), kCommands);
