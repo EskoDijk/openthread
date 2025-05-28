@@ -223,7 +223,7 @@ Error BleSecure::SendApplicationTlv(uint8_t *aBuf, uint16_t aLength)
         ot::Tlv tlv;
 
         tlv.SetType(ot::MeshCoP::TcatAgent::kTlvSendApplicationData);
-        tlv.SetLength((uint8_t)aLength);
+        tlv.SetLength(static_cast<uint8_t>(aLength));
         SuccessOrExit(error = Send(reinterpret_cast<uint8_t *>(&tlv), sizeof(tlv)));
     }
 
@@ -396,7 +396,7 @@ void BleSecure::HandleTlsReceive(uint8_t *aBuf, uint16_t aLength)
     else
     {
         ot::Tlv  tlv;
-        uint32_t requiredBytes = sizeof(Tlv);
+        uint32_t requiredBytes = sizeof(tlv);
         uint32_t offset;
 
         while (aLength > 0)
@@ -479,8 +479,8 @@ void BleSecure::HandleTlsReceive(uint8_t *aBuf, uint16_t aLength)
                                              OT_TCAT_APPLICATION_PROTOCOL_NONE, "");
             }
 
-            SuccessOrExit(mReceivedMessage->SetLength(0)); // also sets the offset to 0
-            requiredBytes = sizeof(Tlv);
+            IgnoreError(mReceivedMessage->SetLength(0)); // also sets the offset to 0
+            requiredBytes = sizeof(tlv);
         }
     }
 

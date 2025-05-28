@@ -66,6 +66,8 @@ void TestTlv(void)
 
     tlv.SetType(1);
     tlv.SetLength(0);
+    VerifyOrQuit(sizeof(tlv) == 2);
+    VerifyOrQuit(sizeof(Tlv) == 2);
     SuccessOrQuit(message->Append(tlv));
 
     SuccessOrQuit(Tlv::FindTlvValueOffsetRange(*message, /* aType */ 1, offsetRange));
@@ -80,6 +82,8 @@ void TestTlv(void)
 
     extTlv.SetType(2);
     extTlv.SetLength(0);
+    VerifyOrQuit(sizeof(extTlv) == 4);
+    VerifyOrQuit(sizeof(ExtendedTlv) == 4);
     SuccessOrQuit(message->Append(extTlv));
 
     SuccessOrQuit(Tlv::FindTlvValueOffsetRange(*message, /* aType */ 2, offsetRange));
@@ -94,6 +98,7 @@ void TestTlv(void)
 
     tlv.SetType(3);
     tlv.SetLength(1);
+    VerifyOrQuit(sizeof(tlv) == 2);
     SuccessOrQuit(message->Append(tlv));
     SuccessOrQuit(message->Append<uint8_t>(0xff));
 
@@ -110,6 +115,7 @@ void TestTlv(void)
 
     extTlv.SetType(4);
     extTlv.SetLength(2);
+    VerifyOrQuit(sizeof(extTlv) == 4);
     SuccessOrQuit(message->Append(extTlv));
     SuccessOrQuit(message->Append<uint8_t>(0x12));
     SuccessOrQuit(message->Append<uint8_t>(0x34));
