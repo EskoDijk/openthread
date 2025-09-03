@@ -1098,6 +1098,68 @@ void TcatAgent::HandleTimer(void)
     IgnoreError(Get<Ble::BleSecure>().NotifySendAdvertisements(NeedsToAdvertise()));
 }
 
+template <> void TcatAgent::HandleTmf<kUriTcatEnable>(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
+{
+    Error          error = kErrorNone;
+    Coap::Message *message = nullptr;
+    uint32_t       delayTimerMs = 0;
+    uint32_t       durationMs = 0;
+    uint16_t       durationSec = 0;
+    uint32_t       enableTimerRemaining = 0;
+
+    VerifyOrExit(aMessage.IsConfirmablePostRequest());
+    LogInfo("Received %s from %s", UriToString<kUriTcatEnable>(),
+            aMessageInfo.GetPeerAddr().ToString().AsCString());
+    message = Get<Tmf::Agent>().NewResponseMessage(aMessage);
+    VerifyOrExit(message != nullptr, error = kErrorNoBufs);
+
+    SuccessOrExit(error = Tlv::Find<DelayTimerTlv>(aMessage, delayTimerMs));
+    if (Tlv::Find<DurationTlv>(aMessage, durationSec) != kErrorNone)
+    {
+        durationSec = kTcatTmfEnableDefaultSec; // If Duration TLV absent: use default duration
+    }
+    VerifyOrExit(durationSec > 0, error = kErrorParse);
+    durationMs = durationSec * Time::kOneSecondInMsec;
+    enableTimerRemaining = mEnableTimer.GetFireTime().GetValue();
+    switch(mState)
+    {
+    case kStateDisabled:
+        OT_FALL_THROUGH;
+    case kStateWaitingToEnable:
+        mEnableDurationMs = durationMs;
+        if (delayTimerMs > 0)
+        {
+            mEnableTimer.Start(delayTimerMs);
+            mState = kStateWaitingToEnable;
+        } else {
+            mEnableTimer.Start(durationMs);
+            mState = kStateEnabled;
+        }
+        break;
+    case kStateEnabledTemporary:
+        // Spec: duration can only be made longer than last accepted one
+        mEnableDurationMs = Max( enableTimerRemaining, delayTimerMs + durationMs );
+        mEnableTimer.Start(mEnableDurationMs);
+        break;
+    case kStateEnabled:
+        // already enabled by the higher layer - do nothing additional.
+        break;
+    case kStateConnected:
+        // Spec: reject the request if already connected to Commissioner.
+        error = kErrorAlready;
+    }
+exit:
+    if (message != nullptr)
+    {
+        IgnoreError(
+            Tlv::Append<StateTlv>(*message, error == kErrorNone ? StateTlv::State::kAccept : StateTlv::State::kReject));
+        error = Get<Tmf::Agent>().SendMessage(*message, aMessageInfo);
+        FreeMessageOnError(message, error);
+    }
+    LogWarnOnError(error, "send TCAT_ENABLE.rsp");
+}
+
+
 void SerializeTcatAdvertisementTlv(uint8_t                 *aBuffer,
                                    uint16_t                &aOffset,
                                    TcatAdvertisementTlvType aType,
