@@ -114,7 +114,7 @@ def setup_backbone_env():
 def parse_args():
     import argparse
     parser = argparse.ArgumentParser(description='Process some integers.')
-    parser.add_argument('--multiply', type=int, default=1, help='run each test for multiple times')
+    parser.add_argument('--multiply', type=int, default=20, help='run each test for multiple times')
     parser.add_argument('--run-directory', type=str, default=None, help='run each test in the specified directory')
     parser.add_argument("scripts", nargs='+', type=str, help='specify Backbone test scripts')
 
