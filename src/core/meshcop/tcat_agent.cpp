@@ -595,6 +595,9 @@ Error TcatAgent::HandleSetActiveOperationalDataset(const Message &aIncomingMessa
 
     Get<ActiveDatasetManager>().SaveLocal(dataset);
 
+    // by default, set TCAT operation to standby after a successful commissioning.
+    IgnoreError(Standby());
+
 exit:
     return error;
 }
