@@ -26,21 +26,21 @@
   POSSIBILITY OF SUCH DAMAGE.
 """
 
-from cli.command import Command, CommandResult, CommandResultNone
-from dataset.dataset import ThreadDataset, initial_dataset
-from tlv.dataset_tlv import MeshcopTlvType
 from copy import deepcopy
 
+from cli.command import Command, CommandResult, CommandResultNone, CommandResultDone
+from dataset.dataset import ThreadDataset, initial_dataset
+from tlv.dataset_tlv import MeshcopTlvType
 
-def handle_dataset_entry_command(type: MeshcopTlvType, args, context):
+
+def handle_dataset_entry_command(type: MeshcopTlvType, args, context) -> CommandResult:
     ds: ThreadDataset = context['dataset']
     if len(args) == 0:
         ds.get_entry(type).print_content()
         return CommandResultNone()
 
     ds.set_entry(type, args)
-    print('Done.')
-    return CommandResultNone()
+    return CommandResultDone()
 
 
 class DatasetClearCommand(Command):

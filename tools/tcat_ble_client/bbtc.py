@@ -29,17 +29,17 @@
 import asyncio
 import argparse
 import logging
-import os
 
-from ble.ble_connection_constants import BBTC_SERVICE_UUID, BBTC_TX_CHAR_UUID, \
-    BBTC_RX_CHAR_UUID
-from ble.ble_stream import BleStream
+from bleak import BLEDevice
+
 from ble.ble_stream_secure import BleStreamSecure
 from ble.udp_stream import UdpStream
 from ble import ble_scanner
 from cli.cli import CLI
 from dataset.dataset import ThreadDataset
 from cli.command import CommandResult
+from tlv.tcat_tlv import TcatTLVType
+from tlv.tlv import TLV
 from utils import hexdump_ot, select_device_by_user_input, quit_with_reason
 
 logger = logging.getLogger(__name__)
@@ -96,43 +96,59 @@ async def main():
             logger.error(e)
             logger.debug(e, exc_info=True)
 
+    # Stop Task 1
     receiver_task.cancel()
     try:
         await receiver_task
     except asyncio.CancelledError:
         pass
 
+    # Disconnect from TCAT device (if still needed)
     await cli.disconnect()
 
 
-async def receive_loop(cli_context: dict):
+async def receive_loop(cli_context: dict) -> None:
     try:
         while True:
             bless: BleStreamSecure = cli_context['ble_sstream']
-            if bless is not None and bless.is_connected:
-                data = await bless.recv_events()
+            if bless is not None:
+                data = await bless.recv_unsolicited_event()
                 if data:
                     logger.info('Received event data from TCAT Device:\n' + hexdump_ot("Event", data))
+                    try:
+                        tlv = TLV.from_bytes(data)
+                        validate_unsolicited_tlv(tlv)
+                    finally:
+                        pass
                     continue
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.100)
 
     except asyncio.CancelledError:
-        pass
+        return
 
 
-async def get_device_by_args(args):
+def validate_unsolicited_tlv(tlv: TLV):
+    if tlv.type in [
+            TcatTLVType.APPLICATION_DATA_1.value, TcatTLVType.APPLICATION_DATA_2.value,
+            TcatTLVType.APPLICATION_DATA_3.value, TcatTLVType.APPLICATION_DATA_4.value
+    ]:
+        num = tlv.type - TcatTLVType.APPLICATION_DATA_1.value + 1
+        logger.info(f"  - Send Application Data {num} {hex(tlv.type)}")
+    elif tlv.type in [TcatTLVType.RESPONSE_EVENT.value]:
+        logger.info(f"  - Response Event {hex(tlv.type)}")
+    else:
+        logger.error(f"Error: Illegal unsolicited TLV type sent by TCAT Device: {hex(tlv.type)}")
+
+
+async def get_device_by_args(args) -> BLEDevice | UdpStream:
     device = None
     if args.mac:
         device = await ble_scanner.find_first_by_mac(args.mac)
-        device = await BleStream.create(device.address, BBTC_SERVICE_UUID, BBTC_TX_CHAR_UUID, BBTC_RX_CHAR_UUID)
     elif args.name:
         device = await ble_scanner.find_first_by_name(args.name)
-        device = await BleStream.create(device.address, BBTC_SERVICE_UUID, BBTC_TX_CHAR_UUID, BBTC_RX_CHAR_UUID)
     elif args.scan:
         tcat_devices = await ble_scanner.scan_tcat_devices(adapter=args.adapter)
         device = select_device_by_user_input(tcat_devices)
-        if device:
-            device = await BleStream.create(device, BBTC_SERVICE_UUID, BBTC_TX_CHAR_UUID, BBTC_RX_CHAR_UUID)
     elif args.simulation:
         device = UdpStream("127.0.0.1", int(args.simulation))
 
