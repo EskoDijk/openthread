@@ -34,21 +34,19 @@ from os import path
 from secrets import token_bytes
 from time import time
 
-from bleak import args
+from bleak import BLEDevice
 
 from ble.ble_connection_constants import BBTC_SERVICE_UUID, BBTC_TX_CHAR_UUID, BBTC_RX_CHAR_UUID
 from ble.ble_stream import BleStream
 from ble.ble_stream_secure import BleStreamSecure
 from ble import ble_scanner
 from ble.udp_stream import UdpStream
+from cli.command import Command, CommandResultNone, CommandResultTLV, CommandResult, CommandResultError
 from dataset.dataset import ThreadDataset
 from tlv.tlv import TLV
 from tlv.diagnostic_tlv import DiagnosticTLVType
 from tlv.tcat_tlv import TcatTLVType
 from utils import select_device_by_user_input
-
-from cli.command import Command, CommandResultNone, CommandResultTLV, CommandResult, CommandResultError, \
-    CommandResultDone
 
 CHALLENGE_SIZE = 8
 
@@ -458,14 +456,17 @@ def _handshake_progress_bar(is_concluded: bool):
         print('.', end='', flush=True)
 
 
-async def connect_helper(device, context: dict, timeout_ble=30.0, timeout_simulation=5.0) -> bool:
+async def connect_helper(device: BLEDevice | UdpStream,
+                         context: dict,
+                         timeout_ble=30.0,
+                         timeout_simulation=5.0) -> bool:
     """Helper function for CLI and commands to establish a new secure connection with a TCAT device.
 
     Handles both BLE and simulated UDP connections. Loads certificates and performs handshake
     to establish a secure channel. Connection objects are stored in the context dictionary.
 
     Args:
-        device: BLE device object, or UDP stream (for simulation)
+        device: BLEDevice object, or UdpStream (for simulation)
         context: Dictionary containing application context including command line arguments
         timeout_ble: Timeout in seconds for handshake with real TCAT device (default: 30.0)
         timeout_simulation: Timeout in seconds for handshake for simulated TCAT device (default: 5.0)
@@ -522,8 +523,10 @@ async def connect_helper(device, context: dict, timeout_ble=30.0, timeout_simula
 async def disconnect_helper(context: dict) -> None:
     """Helper function for CLI and commands to disconnect from a TCAT device."""
     bless: BleStreamSecure = context['ble_sstream']
+    doing_disconn = False
     if bless is not None and bless.is_connected:
         print('Disconnecting...')
+        doing_disconn = True
         logger.debug('Closing TLS connection.')
         await bless.close()
     context['ble_sstream'] = None
@@ -533,6 +536,8 @@ async def disconnect_helper(context: dict) -> None:
         logger.debug('Closing BLE connection.')
         await bles.disconnect()
     context['ble_stream'] = None
+    if doing_disconn:
+        print('Done')
 
 
 class ScanCommand(Command):
@@ -544,13 +549,12 @@ class ScanCommand(Command):
         if context['ble_sstream'] is not None and context['ble_sstream'].is_connected:
             return CommandResultError('already connected to a TCAT device. Use \'disconnect\' first.')
 
+        print('Scanning for BLE TCAT devices...')
         tcat_devices = await ble_scanner.scan_tcat_devices()
         device = select_device_by_user_input(tcat_devices)
+        if device is not None:
+            await connect_helper(device, context)
 
-        if device is None:
-            return CommandResultNone()
-
-        context['ble_sstream'] = await connect_helper(device, context)
         return CommandResultNone()
 
 
@@ -566,8 +570,7 @@ class SimulationCommand(Command):
             return CommandResultError('already connected to a TCAT device. Use \'disconnect\' first.')
 
         device = UdpStream("127.0.0.1", int(args[0]))
-        if await connect_helper(device, context):
-            return CommandResultDone()
+        await connect_helper(device, context)
         return CommandResultNone()
 
 
