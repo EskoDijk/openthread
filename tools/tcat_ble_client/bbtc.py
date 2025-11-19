@@ -101,30 +101,24 @@ async def main():
     try:
         await receiver_task
     except asyncio.CancelledError:
+        # CancelledError is expected when awaiting the canceled task - not an error.
         pass
 
     # Disconnect from TCAT device (if still needed)
     await cli.disconnect()
 
 
-async def receive_loop(cli_context: dict) -> None:
-    try:
-        while True:
-            bless: BleStreamSecure = cli_context['ble_sstream']
-            if bless is not None:
-                data = await bless.recv_unsolicited_event()
-                if data:
-                    logger.info('Received event data from TCAT Device:\n' + hexdump_ot("Event", data))
-                    try:
-                        tlv = TLV.from_bytes(data)
-                        validate_unsolicited_tlv(tlv)
-                    finally:
-                        pass
-                    continue
-            await asyncio.sleep(0.100)
-
-    except asyncio.CancelledError:
-        return
+async def receive_loop(cli_context: dict):
+    while True:
+        bless: BleStreamSecure = cli_context['ble_sstream']
+        if bless is not None:
+            data = await bless.recv_unsolicited_event()
+            if data:
+                logger.info('Received event data from TCAT Device:\n' + hexdump_ot("Event", data))
+                tlv = TLV.from_bytes(data)
+                validate_unsolicited_tlv(tlv)
+                continue
+        await asyncio.sleep(0.100)
 
 
 def validate_unsolicited_tlv(tlv: TLV):
@@ -140,7 +134,7 @@ def validate_unsolicited_tlv(tlv: TLV):
         logger.error(f"Error: Illegal unsolicited TLV type sent by TCAT Device: {hex(tlv.type)}")
 
 
-async def get_device_by_args(args) -> BLEDevice | UdpStream:
+async def get_device_by_args(args) -> BLEDevice | UdpStream | None:
     device = None
     if args.mac:
         device = await ble_scanner.find_first_by_mac(args.mac)
