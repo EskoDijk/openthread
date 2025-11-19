@@ -104,8 +104,8 @@ class CommandResultNone(CommandResult):
 
 class CommandResultDone(CommandResult):
 
-    def pretty_print(self) -> str:
-        return "Done"
+    def pretty_print(self):
+        print("Done")
 
 
 class CommandResultError(CommandResult):

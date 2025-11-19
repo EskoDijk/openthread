@@ -341,7 +341,7 @@ class BleStreamSecure:
     @property
     def is_connected(self):
         return self._peer_public_key is not None and self.ssl_object is not None and \
-        hasattr(self.ssl_object, 'session') and self.ssl_object.session
+            hasattr(self.ssl_object, 'session') and self.ssl_object.session
 
     @property
     def peer_public_key(self):
