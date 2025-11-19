@@ -28,10 +28,10 @@
 
 import _ssl
 import asyncio
+from collections.abc import Callable
 import logging
 import ssl
 from time import time
-from typing import Optional, Callable
 
 from cryptography.x509 import load_der_x509_certificate
 from cryptography.hazmat.primitives.serialization import (Encoding, PublicFormat)
@@ -72,11 +72,12 @@ class BleStreamSecure:
     async def do_handshake(self,
                            buffersize: int = 4096,
                            timeout: float = 30.0,
-                           progress_callback: Optional[Callable[[bool], None]] = None) -> bool:
+                           progress_callback: Callable[[bool], None] | None = None) -> bool:
         """
         Performs a TLS handshake with a TCAT Device, reporting progress via an optional callback.
 
         Args:
+            buffersize: the size of the buffer used for reading/writing data blocks during the handshake.
             timeout: The maximum time in seconds to wait for the handshake to complete.
             progress_callback: A function that accepts one boolean argument:
                                - False (is_concluded=False): The handshake attempt is ongoing.
@@ -161,7 +162,7 @@ class BleStreamSecure:
         return True
 
     # Precondition: caller must handle all exceptions raised
-    async def _send(self, data: bytes, buffersize: int = 4096) -> None:
+    async def _send(self, data: bytes, buffersize: int = 4096):
         hexdump_str = utils.hexdump_ot("Tx", data) if len(data) > 0 else ''
         logger.debug(f"tx {len(data)} bytes\n{hexdump_str}")
         self.ssl_object.write(data)
@@ -339,20 +340,20 @@ class BleStreamSecure:
             await asyncio.sleep(0.010)
 
     @property
-    def is_connected(self):
+    def is_connected(self) -> bool:
         return self._peer_public_key is not None and self.ssl_object is not None and \
             hasattr(self.ssl_object, 'session') and self.ssl_object.session
 
     @property
-    def peer_public_key(self):
+    def peer_public_key(self) -> bytes | None:
         return self._peer_public_key
 
     @property
-    def peer_challenge(self):
+    def peer_challenge(self) -> bytes | None:
         return self._peer_challenge
 
     @peer_challenge.setter
-    def peer_challenge(self, value):
+    def peer_challenge(self, value: bytes | None):
         self._peer_challenge = value
 
     def log_cert_identities(self):

@@ -12,13 +12,39 @@
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
+
+  Copyright (c) 2025, The OpenThread Authors.
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+  1. Redistributions of source code must retain the above copyright
+     notice, this list of conditions and the following disclaimer.
+  2. Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+  3. Neither the name of the copyright holder nor the
+     names of its contributors may be used to endorse or promote products
+     derived from this software without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  POSSIBILITY OF SUCH DAMAGE.
+
 """
 
-from typing import Dict, List
-
+from dataset.dataset_entries import DatasetEntry, create_dataset_entry, ENTRY_CLASSES
 from tlv.tlv import TLV
 from tlv.dataset_tlv import MeshcopTlvType
-from dataset.dataset_entries import DatasetEntry, create_dataset_entry, ENTRY_CLASSES
 
 initial_dataset = bytes([
     0x0E, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x12, 0x35, 0x06, 0x00, 0x04,
@@ -33,7 +59,7 @@ initial_dataset = bytes([
 class ThreadDataset:
 
     def __init__(self):
-        self.entries: Dict[MeshcopTlvType, DatasetEntry] = {}
+        self.entries: dict[MeshcopTlvType, DatasetEntry] = {}
         self.set_from_bytes(initial_dataset)
 
     def print_content(self):
@@ -48,7 +74,7 @@ class ThreadDataset:
             self.entries[type] = create_dataset_entry(type)
             self.entries[type].set_from_tlv(tlv)
 
-    def to_bytes(self):
+    def to_bytes(self) -> bytes:
         res = bytes()
         for entry in self.entries.values():
             res += entry.to_tlv().to_bytes()
@@ -57,7 +83,7 @@ class ThreadDataset:
     def get_entry(self, type: MeshcopTlvType):
         return self.entries[type]
 
-    def set_entry(self, type: MeshcopTlvType, args: List[str]):
+    def set_entry(self, type: MeshcopTlvType, args: list[str]):
         if type in ENTRY_CLASSES:
             if type in self.entries:
                 self.entries[type].set(args)

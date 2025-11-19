@@ -160,4 +160,5 @@ if __name__ == '__main__':
     try:
         asyncio.run(main())
     except asyncio.CancelledError:
-        pass  # device disconnected
+        # Handle an intentional cancellation of the main task (e.g. Ctrl+C). Avoids noisy traceback.
+        pass

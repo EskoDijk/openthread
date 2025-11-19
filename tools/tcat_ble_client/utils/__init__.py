@@ -34,7 +34,7 @@ from tlv import advertised_tlv
 PRINTABLE_ASCII_BYTES = set(string.printable.encode('ascii'))
 
 
-def get_int_in_range(min_value, max_value):
+def get_int_in_range(min_value, max_value) -> int:
     while True:
         try:
             user_input = int(input('> '))
@@ -53,7 +53,7 @@ def quit_with_reason(reason):
     exit(1)
 
 
-def select_device_by_user_input(tcat_devices):
+def select_device_by_user_input(tcat_devices) -> object | None:
     if tcat_devices:
         print('Found devices:\n')
         for i, (device, adv) in enumerate(tcat_devices):
@@ -71,11 +71,11 @@ def select_device_by_user_input(tcat_devices):
     return device
 
 
-def base64_string(bindata):
+def base64_string(bindata) -> str:
     return base64.b64encode(bindata).decode('ascii')
 
 
-def load_cert_pem(fn):
+def load_cert_pem(fn) -> str:
     with open(fn, 'r') as file:
         return file.read()
 

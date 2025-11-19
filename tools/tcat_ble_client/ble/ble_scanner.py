@@ -26,8 +26,6 @@
   POSSIBILITY OF SUCH DAMAGE.
 """
 
-from typing import Optional
-
 from bleak import BleakScanner
 from bleak.backends.device import BLEDevice
 from bleak.uuids import normalize_uuid_str
@@ -48,7 +46,7 @@ async def find_first_by_mac(mac) -> BLEDevice:
     return device
 
 
-async def scan_tcat_devices(adapter: Optional[str] = None):
+async def scan_tcat_devices(adapter: str | None = None) -> list:
     scanner = BleakScanner()
     tcat_devices: list = []
     service_uuids = [normalize_uuid_str(BBTC_SERVICE_UUID)]

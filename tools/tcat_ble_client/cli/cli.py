@@ -30,7 +30,6 @@ from argparse import Namespace
 import logging
 import readline
 import shlex
-from typing import Optional
 
 from cli.base_commands import (DisconnectCommand, HelpCommand, HelloCommand, CommissionCommand, DecommissionCommand,
                                ExtractDatasetCommand, GetCommissionerCertificate, GetDeviceIdCommand, GetPskdHash,
@@ -49,7 +48,7 @@ logger = logging.getLogger(__name__)
 
 class CLI:
 
-    def __init__(self, dataset: ThreadDataset, cmd_args: Optional[Namespace] = None):
+    def __init__(self, dataset: ThreadDataset, cmd_args: Namespace | None = None):
         self._commands = {
             'help': HelpCommand(),
             'hello': HelloCommand(),
@@ -89,7 +88,7 @@ class CLI:
         readline.set_completer(self.completer)
         readline.parse_and_bind('tab: complete')
 
-    def completer(self, text, state):
+    def completer(self, text: str, state: int) -> str | None:
         command_pool = self._commands.keys()
         full_line = readline.get_line_buffer().lstrip()
         words = full_line.split()
@@ -121,7 +120,7 @@ class CLI:
         else:
             return None
 
-    async def evaluate_input(self, user_input) -> CommandResult:
+    async def evaluate_input(self, user_input: str) -> CommandResult:
         # do not parse empty commands
         if not user_input.strip():
             return CommandResultNone()

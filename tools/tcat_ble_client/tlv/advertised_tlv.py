@@ -1,5 +1,5 @@
 """
-  Copyright (c) 2024, The OpenThread Authors.
+  Copyright (c) 2024-2025, The OpenThread Authors.
   All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -40,7 +40,7 @@ class AdvertisedTlv:
         self._size: int = size
         self._value: bytes = value
 
-    def __str__(self) -> str:
+    def __str__(self):
         return f'TYPE 0x{self._type:02x} VALUE: {str(self._value)}'
 
     def set_from_bytes(self, data: bytes):
@@ -54,7 +54,7 @@ class CapabilitiesTlv(AdvertisedTlv):
     G = 0x80
     L = 0x40
 
-    def __str__(self) -> str:
+    def __str__(self):
         val = int.from_bytes(self._value, 'big')
         return f'TYPE 0x{self._type:02x} G: {is_set(val, self.G)} L: {is_set(val, self.L)}'
 
@@ -68,17 +68,16 @@ class DeviceTypeStatusTlv(AdvertisedTlv):
     S = 0x04
     M = 0x02
 
-    def __str__(self) -> str:
+    def __str__(self):
         val = int.from_bytes(self._value, 'big')
         return f'TYPE 0x{self._type:02x} D: {is_set(val, self.D)} R: {is_set(val, self.R)} B: {is_set(val, self.B)} T: {is_set(val, self.T)} C: {is_set(val, self.C)} S: {is_set(val, self.S)} M: {is_set(val, self.M)}'
 
 
-def is_set(val, flag):
+def is_set(val, flag) -> int:
     return 1 if val & flag else 0
 
 
-def _create_tlv(data: bytes):
-    res = None
+def _create_tlv(data: bytes) -> AdvertisedTlv:
     header_len = 1
     type = (data[0] & 0xf0) >> 4
     size = data[0] & 0xf
@@ -94,7 +93,7 @@ def _create_tlv(data: bytes):
     return res
 
 
-def parse_tlvs(data: bytes):
+def parse_tlvs(data: bytes) -> list[AdvertisedTlv]:
     res = []
     while data:
         next_tlv = _create_tlv(data)

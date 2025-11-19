@@ -42,10 +42,9 @@
 
 """
 
+from abc import ABC, abstractmethod
 import struct
 import inspect
-from typing import List
-from abc import ABC, abstractmethod
 
 from tlv.dataset_tlv import MeshcopTlvType
 from tlv.tlv import TLV
@@ -60,7 +59,7 @@ class DatasetEntry(ABC):
         self.length = None
         self.maxlen = None
 
-    def print_content(self, indent: int = 0, excluded_fields: List[str] = []):
+    def print_content(self, indent: int = 0, excluded_fields: list[str] = []):
         excluded_fields += ['length', 'maxlen', 'type']
         indentation = " " * 4 * indent
         for attr_name in dir(self):
@@ -80,7 +79,7 @@ class DatasetEntry(ABC):
         pass
 
     @abstractmethod
-    def set(self, args: List[str]):
+    def set(self, args: list[str]):
         pass
 
 
@@ -93,7 +92,7 @@ class ActiveTimestamp(DatasetEntry):
         self.ubit = 0
         self.ticks = 0
 
-    def set(self, args: List[str]):
+    def set(self, args: list[str]):
         if len(args) == 0:
             raise ValueError('No argument for ActiveTimestamp')
         self.seconds = int(args[0])
@@ -119,7 +118,7 @@ class PendingTimestamp(DatasetEntry):
         self.ubit = 0
         self.ticks = 0
 
-    def set(self, args: List[str]):
+    def set(self, args: list[str]):
         if len(args) == 0:
             raise ValueError('No argument for PendingTimestamp')
         self.seconds = int(args[0])
@@ -143,7 +142,7 @@ class NetworkKey(DatasetEntry):
         self.length = 16  # spec defined
         self.data: str = ''
 
-    def set(self, args: List[str]):
+    def set(self, args: list[str]):
         if len(args) == 0:
             raise ValueError('No argument for NetworkKey')
         if args[0].startswith('0x'):
@@ -171,7 +170,7 @@ class NetworkName(DatasetEntry):
         self.maxlen = 16
         self.data: str = ''
 
-    def set(self, args: List[str]):
+    def set(self, args: list[str]):
         if len(args) == 0:
             raise ValueError('No argument for NetworkName')
         nn = args[0]
@@ -196,7 +195,7 @@ class ExtPanID(DatasetEntry):
         self.length = 8  # spec defined
         self.data: str = ''
 
-    def set(self, args: List[str]):
+    def set(self, args: list[str]):
         if len(args) == 0:
             raise ValueError('No argument for ExtPanID')
         if args[0].startswith('0x'):
@@ -225,7 +224,7 @@ class MeshLocalPrefix(DatasetEntry):
         self.length = 8  # spec defined
         self.data = ''
 
-    def set(self, args: List[str]):
+    def set(self, args: list[str]):
         if len(args) == 0:
             raise ValueError('No argument for MeshLocalPrefix')
         if args[0].startswith('0x'):
@@ -254,7 +253,7 @@ class DelayTimer(DatasetEntry):
         self.length = 4  # spec defined
         self.time_remaining = 0
 
-    def set(self, args: List[str]):
+    def set(self, args: list[str]):
         if len(args) == 0:
             raise ValueError('No argument for DelayTimer')
         dt = int(args[0])
@@ -276,7 +275,7 @@ class PanID(DatasetEntry):
         self.length = 2  # spec defined
         self.data: str = ''
 
-    def set(self, args: List[str]):
+    def set(self, args: list[str]):
         if len(args) == 0:
             raise ValueError('No argument for PanID')
         if args[0].startswith('0x'):
@@ -306,7 +305,7 @@ class Channel(DatasetEntry):
         self.channel_page = 0
         self.channel = 0
 
-    def set(self, args: List[str]):
+    def set(self, args: list[str]):
         if len(args) == 0:
             raise ValueError('No argument for Channel')
         channel = int(args[0])
@@ -329,7 +328,7 @@ class Pskc(DatasetEntry):
         self.maxlen = 16
         self.data = ''
 
-    def set(self, args: List[str]):
+    def set(self, args: list[str]):
         if len(args) == 0:
             raise ValueError('No argument for Pskc')
         if args[0].startswith('0x'):
@@ -372,7 +371,7 @@ class SecurityPolicy(DatasetEntry):
         self.rsv = 0b111
         self.version_threshold = 0
 
-    def set(self, args: List[str]):
+    def set(self, args: list[str]):
         if len(args) == 0:
             raise ValueError('No argument for SecurityPolicy')
         rotation_time, flags, version_threshold = args + [None] * (3 - len(args))
@@ -455,7 +454,7 @@ class ChannelMask(DatasetEntry):
         super().__init__(MeshcopTlvType.CHANNELMASK)
         self.entries: List[ChannelMaskEntry] = []
 
-    def set(self, args: List[str]):
+    def set(self, args: list[str]):
         # to remain consistent with the OpenThread CLI API,
         # provided hex string is value of the first channel mask entry
         if len(args) == 0:
@@ -491,15 +490,13 @@ class ChannelMaskEntry(DatasetEntry):
     def __init__(self):
         super().__init__(MeshcopTlvType.CHANNELMASK)  # Note: type not used in set_from_tlv / to_tlv
         self.channel_page = 0
-        self.mask_length = 0
         self.channel_mask: bytes = None
 
-    def set(self, args: List[str]):
+    def set(self, args: list[str]):
         pass
 
     def set_from_tlv(self, tlv: TLV):
         self.channel_page = tlv.type
-        self.mask_length = len(tlv.value)
         self.channel_mask = tlv.value
 
     def to_tlv(self):
@@ -516,7 +513,7 @@ class WakeupChannel(DatasetEntry):
         self.channel_page = 0
         self.channel = 0
 
-    def set(self, args: List[str]):
+    def set(self, args: list[str]):
         if len(args) == 0:
             raise ValueError('No argument for WakeupChannel')
         channel = int(args[0])
@@ -549,7 +546,7 @@ ENTRY_CLASSES = {
 }
 
 
-def create_dataset_entry(type: MeshcopTlvType, args=None):
+def create_dataset_entry(type: MeshcopTlvType, args: list[str] | None = None) -> DatasetEntry:
     entry_class = ENTRY_CLASSES.get(type)
     if not entry_class:
         raise ValueError(f"Invalid configuration type: {type}")

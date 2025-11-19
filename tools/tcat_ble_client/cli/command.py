@@ -49,17 +49,17 @@ class Command(ABC):
     def __init__(self):
         self._subcommands = {}
 
-    async def execute(self, args, context) -> CommandResult:
+    async def execute(self, args: list[str], context: dict) -> CommandResult:
         if len(args) > 0 and args[0] in self._subcommands.keys():
             return await self.execute_subcommand(args, context)
 
         return await self.execute_default(args, context)
 
-    async def execute_subcommand(self, args, context) -> CommandResult:
+    async def execute_subcommand(self, args: list[str], context: dict) -> CommandResult:
         return await self._subcommands[args[0]].execute(args[1:], context)
 
     @abstractmethod
-    async def execute_default(self, args, context) -> CommandResult:
+    async def execute_default(self, args: list[str], context: dict) -> CommandResult:
         pass
 
     @abstractmethod

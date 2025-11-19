@@ -1,5 +1,5 @@
 """
-  Copyright (c) 2024, The OpenThread Authors.
+  Copyright (c) 2024-2025, The OpenThread Authors.
   All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -27,10 +27,9 @@
 """
 
 from __future__ import annotations
-from typing import List
 
 
-class TLV():
+class TLV:
 
     def __init__(self, type: int = None, value: bytes = None):
         self.type: int = type
@@ -40,8 +39,8 @@ class TLV():
         return f'TLV\n\tTYPE:\t0x{self.type:02x}\n\tVALUE:\t{self.value.hex()}'
 
     @staticmethod
-    def parse_tlvs(data: bytes) -> List[TLV]:
-        res: List[TLV] = []
+    def parse_tlvs(data: bytes) -> list[TLV]:
+        res: list[TLV] = []
         while data:
             next_tlv = TLV.from_bytes(data)
             next_tlv_size = len(next_tlv.to_bytes())
@@ -69,7 +68,7 @@ class TLV():
         has_long_header = len(self.value) >= 254
         header_len = 4 if has_long_header else 2
         len_bytes = len(self.value).to_bytes(header_len // 2, byteorder='big')
-        type = self.type
+        type: int = self.type
         if has_long_header:
             type = type << 8 | 255
         header = type.to_bytes(header_len // 2, byteorder='big') + len_bytes

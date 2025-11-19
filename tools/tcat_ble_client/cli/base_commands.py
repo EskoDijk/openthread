@@ -77,10 +77,10 @@ class BleCommand(Command):
         pass
 
     @abstractmethod
-    def prepare_data(self, args, context) -> bytes:
+    def prepare_data(self, args: list, context: dict) -> bytes:
         pass
 
-    async def execute_default(self, args, context) -> CommandResult:
+    async def execute_default(self, args: list, context: dict) -> CommandResult:
         if context['ble_sstream'] is None or not context['ble_sstream'].is_connected:
             return CommandResultError("TCAT Device not connected.")
         bless: BleStreamSecure = context['ble_sstream']
@@ -97,7 +97,7 @@ class BleCommand(Command):
         except DataNotPrepared as err:
             return CommandResultError(f'Command failed: {err}')
 
-    def process_response(self, tlv_response, context):
+    def process_response(self, tlv_response: TLV, context: dict):
         pass
 
 
@@ -124,7 +124,7 @@ class GetApplicationLayersCommand(BleCommand):
     def prepare_data(self, args, context) -> bytes:
         return TLV(TcatTLVType.GET_APPLICATION_LAYERS.value, bytes()).to_bytes()
 
-    def process_response(self, tlv_response, context):
+    def process_response(self, tlv_response: TLV, context):
         if tlv_response.type == TcatTLVType.RESPONSE_W_PAYLOAD.value:
             payload = tlv_response.value
             i = 0
@@ -133,9 +133,9 @@ class GetApplicationLayersCommand(BleCommand):
                 tlv_application = TLV.from_bytes(payload)
                 payload = payload[2 + len(tlv_application.value):]
                 i += 1
-                if (tlv_application.type == TcatTLVType.SERVICE_NAME_UDP.value):
+                if tlv_application.type == TcatTLVType.SERVICE_NAME_UDP.value:
                     print(f"\tApplication {i} is UDP service: {tlv_application.value.decode('ascii')}")
-                elif (tlv_application.type == TcatTLVType.SERVICE_NAME_TCP.value):
+                elif tlv_application.type == TcatTLVType.SERVICE_NAME_TCP.value:
                     print(f"\tApplication {i} is TCP service: {tlv_application.value.decode('ascii')}")
                 else:
                     print('\tUnknown service type.')
@@ -255,7 +255,7 @@ class ExtractDatasetCommand(BleCommand):
     def prepare_data(self, args, context) -> bytes:
         return TLV(TcatTLVType.GET_ACTIVE_DATASET.value, bytes()).to_bytes()
 
-    def process_response(self, tlv_response, context) -> None:
+    def process_response(self, tlv_response: TLV, context):
         if tlv_response.type == TcatTLVType.RESPONSE_W_PAYLOAD.value:
             dataset = ThreadDataset()
             dataset.set_from_bytes(tlv_response.value)
@@ -346,13 +346,13 @@ class GetPskdHash(BleCommand):
 
         data = TLV(TcatTLVType.GET_PSKD_HASH.value, challenge).to_bytes()
 
-        hash = hmac.new(pskd, digestmod=sha256)
+        hash: hmac.HMAC = hmac.new(pskd, digestmod=sha256)
         hash.update(challenge)
         hash.update(bless.peer_public_key)
         self.digest = hash.digest()
         return data
 
-    def process_response(self, tlv_response, context) -> None:
+    def process_response(self, tlv_response: TLV, context):
         if tlv_response.value == self.digest:
             print('Requested hash is valid.')
         else:
@@ -370,7 +370,7 @@ class GetRandomNumberChallenge(BleCommand):
     def prepare_data(self, args, context) -> bytes:
         return TLV(TcatTLVType.GET_RANDOM_NUMBER_CHALLENGE.value, bytes()).to_bytes()
 
-    def process_response(self, tlv_response, context) -> None:
+    def process_response(self, tlv_response: TLV, context):
         bless: BleStreamSecure = context['ble_sstream']
         if tlv_response.value is not None:
             if len(tlv_response.value) == CHALLENGE_SIZE:
@@ -441,7 +441,7 @@ class PresentHash(BleCommand):
         if bless.peer_challenge is None:
             raise DataNotPrepared("Peer challenge not present.")
 
-        hash = hmac.new(code, digestmod=sha256)
+        hash: hmac.HMAC = hmac.new(code, digestmod=sha256)
         hash.update(bless.peer_challenge)
         hash.update(bless.peer_public_key)
 
@@ -520,7 +520,7 @@ async def connect_helper(device: BLEDevice | UdpStream,
         return False
 
 
-async def disconnect_helper(context: dict) -> None:
+async def disconnect_helper(context: dict):
     """Helper function for CLI and commands to disconnect from a TCAT device."""
     bless: BleStreamSecure = context['ble_sstream']
     doing_disconn = False

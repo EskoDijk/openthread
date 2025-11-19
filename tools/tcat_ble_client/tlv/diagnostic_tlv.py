@@ -31,41 +31,44 @@ class DiagnosticTLVType:
 
     def __init__(self):
         self._tlv_dict = {
-            'extaddr': '0',
-            'macaddr': '1',
-            'mode': '2',
-            'timeout': '3',
-            'connectivity': '4',
-            'route64': '5',
-            'leaderdata': '6',
-            'networkdata': '7',
-            'ipaddr': '8',
-            'maccounters': '9',
-            'batterylevel': '14',
-            'supplyvoltage': '15',
-            'childtable': '16',
-            'channelpages': '17',
-            'maxchildtimeout': '19',
-            'eui64': '23',
-            'version': '24',
-            'vendorname': '25',
-            'vendormodel': '26',
-            'vendorswversion': '27',
-            'threadstackversion': '28',
-            'child': '29',
-            'childipv6list': '30',
-            'routerneighbor': '31',
-            'mlecounters': '34',
-            'vendorappurl': '35',
-            'channeldenylist': '36'
+            'extaddr': 0,
+            'macaddr': 1,
+            'mode': 2,
+            'timeout': 3,
+            'connectivity': 4,
+            'route64': 5,
+            'leaderdata': 6,
+            'networkdata': 7,
+            'ipaddr': 8,
+            'maccounters': 9,
+            'batterylevel': 14,
+            'supplyvoltage': 15,
+            'childtable': 16,
+            'channelpages': 17,
+            'maxchildtimeout': 19,
+            'eui64': 23,
+            'version': 24,
+            'vendorname': 25,
+            'vendormodel': 26,
+            'vendorswversion': 27,
+            'threadstackversion': 28,
+            'child': 29,
+            'childipv6list': 30,
+            'routerneighbor': 31,
+            'mlecounters': 34,
+            'vendorappurl': 35,
+            'channeldenylist': 36
         }
 
     @staticmethod
-    def names_to_numbers(args):
+    def names_to_numbers(args: list[str]) -> list[str]:
+        """
+        In a mixed numbers/names argument list, converts known names only to numbers.
+        """
         res = DiagnosticTLVType()
-        return [x if x not in res._tlv_dict else res._tlv_dict[x] for x in args]
+        return [x if x not in res._tlv_dict else str(res._tlv_dict[x]) for x in args]
 
     @staticmethod
-    def get_dict():
+    def get_dict() -> dict[str, str]:
         res = DiagnosticTLVType()
         return res._tlv_dict

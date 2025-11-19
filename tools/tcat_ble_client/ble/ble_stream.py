@@ -1,5 +1,5 @@
 """
-  Copyright (c) 2024, The OpenThread Authors.
+  Copyright (c) 2024-2025, The OpenThread Authors.
   All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -26,15 +26,13 @@
   POSSIBILITY OF SUCH DAMAGE.
 """
 
+import asyncio
 from itertools import count, takewhile
-from typing import Iterator, Union
 import logging
 import time
-from asyncio import sleep
+from typing import Iterator
 
-from bleak import BleakClient
-from bleak.backends.device import BLEDevice
-from bleak.backends.characteristic import BleakGATTCharacteristic
+from bleak import BleakClient, BLEDevice, BleakGATTCharacteristic
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +58,7 @@ class BleStream:
             await self.client.disconnect()
 
     def __handle_rx(self, _: BleakGATTCharacteristic, data: bytearray):
-        logger.debug(f'rx {len(data)} bytes')
+        logger.debug(f'rx {len(data)} bytes (__handle_rx)')
         self.__receive_buffer += data
         self.__last_recv_time = time.time()
 
@@ -69,7 +67,7 @@ class BleStream:
         return takewhile(len, (data[i:i + n] for i in count(0, n)))
 
     @classmethod
-    async def create(cls, address_or_ble_device: Union[BLEDevice, str], service_uuid, tx_char_uuid, rx_char_uuid):
+    async def create(cls, address_or_ble_device: str | BLEDevice, service_uuid, tx_char_uuid, rx_char_uuid):
         client = BleakClient(address_or_ble_device)
         await client.connect()
         self = cls(client, service_uuid, tx_char_uuid, rx_char_uuid)
@@ -84,12 +82,12 @@ class BleStream:
             await self.client.write_gatt_char(rx_char, s)
         return len(data)
 
-    async def recv(self, bufsize, recv_timeout=0.2):
+    async def recv(self, bufsize, recv_timeout=0.2) -> bytes:
         if not self.__receive_buffer:
             return b''
 
         while time.time() - self.__last_recv_time <= recv_timeout:
-            await sleep(0.1)
+            await asyncio.sleep(0.1)
 
         data = self.__receive_buffer[:bufsize]
         self.__receive_buffer = self.__receive_buffer[bufsize:]

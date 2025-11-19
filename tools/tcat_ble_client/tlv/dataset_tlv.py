@@ -74,8 +74,8 @@ class MeshcopTlvType(Enum):
     JOINERADVERTISEMENT = 241
 
     @classmethod
-    def from_value(cls, value: int):
+    def from_value(cls, value: int) -> Enum | None:
         return cls._value2member_map_.get(value)
 
-    def to_bytes(self):
+    def to_bytes(self) -> bytes:
         return bytes([self.value])

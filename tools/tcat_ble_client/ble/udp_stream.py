@@ -37,7 +37,7 @@ class UdpStream:
     BASE_PORT = 10000
     MAX_SERVER_TIMEOUT_SEC = 0.010
 
-    def __init__(self, address, node_id):
+    def __init__(self, address: str, node_id: int):
         self.__receive_buffer = b''
         self.__last_recv_time = None
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -47,11 +47,11 @@ class UdpStream:
     def __str__(self):
         return f"UdpStream[{self.address[0]}:{self.address[1]}]"
 
-    async def send(self, data):
+    async def send(self, data: bytes):
         logger.debug(f'tx {len(data)} bytes')
         return self.socket.sendto(data, self.address)
 
-    async def recv(self, bufsize):
+    async def recv(self, bufsize: int) -> bytes:
         ready = select.select([self.socket], [], [], self.MAX_SERVER_TIMEOUT_SEC)
         if ready[0]:
             data = self.socket.recv(bufsize)

@@ -33,7 +33,7 @@ from dataset.dataset import ThreadDataset, initial_dataset
 from tlv.dataset_tlv import MeshcopTlvType
 
 
-def handle_dataset_entry_command(type: MeshcopTlvType, args, context) -> CommandResult:
+def handle_dataset_entry_command(type: MeshcopTlvType, args: list[str], context: dict) -> CommandResult:
     ds: ThreadDataset = context['dataset']
     if len(args) == 0:
         ds.get_entry(type).print_content()

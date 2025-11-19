@@ -1,5 +1,5 @@
 """
-  Copyright (c) 2024, The OpenThread Authors.
+  Copyright (c) 2024-2025, The OpenThread Authors.
   All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -26,6 +26,8 @@
   POSSIBILITY OF SUCH DAMAGE.
 """
 
+from __future__ import annotations
+
 from tlv import advertised_tlv
 
 
@@ -45,7 +47,7 @@ class AdvertisedData:
         return res
 
     @staticmethod
-    def from_bytes(data: bytes):
+    def from_bytes(data: bytes) -> AdvertisedData:
         res = AdvertisedData()
         res._op_code = data[0] & 0x0f
         res._version = (data[0] & 0xf0) >> 4
