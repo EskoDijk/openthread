@@ -65,6 +65,7 @@ namespace MeshCoP {
 class TcatAgent : public InstanceLocator, private NonCopyable
 {
     friend class Ble::BleSecure;
+    friend class TcatAgentTester;
 
 public:
     /**
@@ -386,6 +387,23 @@ public:
     bool IsCommandClassAuthorized(CommandClass aCommandClass) const;
 
     /**
+     * Indicates whether or not a TCAT command class is authorized for the given combination of flags
+     * and optional commissioner-supplied dataset.
+     *
+     * @note This method will always use the device's own Active Dataset to perform the authorization checks,
+     *       regardless of whether @p aCommSuppliedDataset is provided or not.
+     *
+     * @param aCommissionerCommandClassFlags   Command class flags for a TCAT Commissioner.
+     * @param aDeviceCommandClassFlags         Command class flags for this TCAT Device.
+     * @param aCommSuppliedDataset             Optional commissioner-supplied Active Dataset. Can be `nullptr` if
+     *                                         none is supplied.
+     * @return
+     */
+    bool IsCommandClassAuthorizedWithFlags(CommandClassFlags aCommissionerCommandClassFlags,
+                                           CommandClassFlags aDeviceCommandClassFlags,
+                                           Dataset          *aCommSuppliedDataset) const;
+
+    /**
      * Gets TCAT advertisement data from the TCAT agent.
      *
      * @param[out] aLen               Advertisement data length (up to OT_TCAT_ADVERTISEMENT_MAX_LEN).
@@ -467,10 +485,7 @@ private:
                      size_t         aBufLen);
     Error CalculateHash(uint64_t aChallenge, const char *aBuf, size_t aBufLen, Crypto::HmacSha256::Hash &aHash);
 
-    bool    CheckCommandClassAuthorizationFlags(CommandClassFlags aCommissionerCommandClassFlags,
-                                                CommandClassFlags aDeviceCommandClassFlags,
-                                                Dataset          *aDataset) const;
-    uint8_t CheckAuthorizationRequirements(CommandClassFlags aFlagsChecked, Dataset::Info *aDatasetInfo) const;
+    uint8_t CheckAuthorizationRequirements(CommandClassFlags aFlagsChecked, Dataset::Info *aDatasetInfo, Dataset::Info *aBackupDatasetInfo) const;
 
     static constexpr uint16_t kPingPayloadMaxLength      = 512;
     static constexpr uint16_t kProvisioningUrlMaxLength  = 64;
@@ -506,6 +521,20 @@ private:
     using ExpireTimer = TimerMilliIn<TcatAgent, &TcatAgent::HandleTimer>;
     ExpireTimer mActiveOrStandbyTimer;
     uint32_t    mTcatActiveDurationMs;
+};
+
+class TcatAgentTester
+{
+public:
+    explicit TcatAgentTester(TcatAgent *agent);
+
+    void MockCommissionerConnected(TcatAgent::CertificateAuthorizationField commAuth,
+                                   TcatAgent::CertificateAuthorizationField deviceAuth);
+
+    void MockCommissionerPskcProof();
+
+private:
+    TcatAgent *mAgent;
 };
 
 DeclareTmfHandler(TcatAgent, kUriTcatEnable);

@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2024, The OpenThread Authors.
+ *  Copyright (c) 2024-2025, The OpenThread Authors.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -75,6 +75,17 @@
 
 namespace ot {
 
+const char         kPskdVendor[]                  = "J01NM3";
+const char         kUrl[]                         = "dummy_url";
+constexpr uint16_t kConnectionId                  = 0;
+const int          kCertificateThreadVersion      = 2;
+const int          kCertificateAuthorizationField = 3;
+const uint8_t      expectedTcatAuthField[5]       = {0x20, 0x01, 0x01, 0x01, 0x01};
+const uint8_t      commcert1AuthField[5]          = {0x21, 0x21, 0x09, 0x09, 0x09};
+
+using MeshCoP::TcatAgent;
+using MeshCoP::TcatAgentTester;
+
 class TestBleSecure
 {
 public:
@@ -107,12 +118,6 @@ static void HandleBleSecureConnect(otInstance *aInstance, bool aConnected, bool 
 
 void TestTcat(void)
 {
-    const char         kPskdVendor[]                  = "J01NM3";
-    const char         kUrl[]                         = "dummy_url";
-    constexpr uint16_t kConnectionId                  = 0;
-    const int          kCertificateThreadVersion      = 2;
-    const int          kCertificateAuthorizationField = 3;
-    const uint8_t      expectedTcatAuthField[5]       = {0x20, 0x01, 0x01, 0x01, 0x01};
     uint8_t            attributeBuffer[8];
     size_t             attributeLen;
 
@@ -158,13 +163,13 @@ void TestTcat(void)
     otBleSecureDisconnect(instance);
     VerifyOrQuit(!ble.IsConnected() && !ble.IsBleConnectionOpen());
 
-    // Validate TLS connection can be started only when peer is connected
+    // Validate TLS connection can be started (as client) only when peer is BLE-connected
     otPlatBleGapOnConnected(instance, kConnectionId);
     SuccessOrQuit(otBleSecureConnect(instance));
     VerifyOrQuit(otBleSecureIsConnectionActive(instance));
 
     // Once in TLS client connecting state, the below cert eval functions are available.
-    // Test that the Thread-specific attributes can be decoded properly.
+    // Test that the Thread-specific attributes from own certificate can be decoded properly.
     attributeLen = 1;
     SuccessOrQuit(otBleSecureGetThreadAttributeFromOwnCertificate(instance, kCertificateThreadVersion,
                                                                   &attributeBuffer[0], &attributeLen));
@@ -176,14 +181,72 @@ void TestTcat(void)
                                                                   &attributeBuffer[0], &attributeLen));
     VerifyOrQuit(attributeLen == 5 && memcmp(&expectedTcatAuthField, &attributeBuffer, attributeLen) == 0);
 
-    // Validate TLS connection can be started only when peer is connected
+    // Validate TLS client connection can be started only when peer is BLE-connected
     otBleSecureDisconnect(instance);
     VerifyOrQuit(otBleSecureConnect(instance) == kErrorInvalidState);
 
-    // Validate Tcat state changes after stopping BLE secure
+    // Validate Tcat agent state changes after stopping BLE secure
     VerifyOrQuit(otBleSecureIsTcatAgentStarted(instance));
     otBleSecureStop(instance);
     VerifyOrQuit(!otBleSecureIsTcatAgentStarted(instance));
+
+    testFreeInstance(instance);
+}
+
+void TestTcatCommissionerAuth(void)
+{
+    TestBleSecure ble;
+    Instance     *instance = testInitInstance();
+
+    otTcatVendorInfo vendorInfo = {.mProvisioningUrl = kUrl, .mPskdString = kPskdVendor};
+
+    otBleSecureSetCertificate(instance, reinterpret_cast<const uint8_t *>(OT_TCAT_X509_CERT), sizeof(OT_TCAT_X509_CERT),
+                          reinterpret_cast<const uint8_t *>(OT_TCAT_PRIV_KEY), sizeof(OT_TCAT_PRIV_KEY));
+    otBleSecureSetCaCertificateChain(instance, reinterpret_cast<const uint8_t *>(OT_TCAT_TRUSTED_ROOT_CERTIFICATE),
+                                     sizeof(OT_TCAT_TRUSTED_ROOT_CERTIFICATE));
+    otBleSecureSetSslAuthMode(instance, true);
+
+    TcatAgent* agent = &instance->Get<TcatAgent>();
+    TcatAgentTester *tester = new TcatAgentTester(agent);
+
+    // validate no Commissioner authorization if not connected
+    VerifyOrQuit(!agent->IsCommandClassAuthorized(TcatAgent::kGeneral));
+    VerifyOrQuit(!agent->IsCommandClassAuthorized(TcatAgent::kCommissioning));
+    VerifyOrQuit(!agent->IsCommandClassAuthorized(TcatAgent::kApplication));
+    VerifyOrQuit(!agent->IsCommandClassAuthorized(TcatAgent::kExtraction));
+    VerifyOrQuit(!agent->IsCommandClassAuthorized(TcatAgent::kDecommissioning));
+
+    // setup TCAT
+    SuccessOrQuit(otBleSecureSetTcatVendorInfo(instance, &vendorInfo));
+    SuccessOrQuit(otBleSecureStart(instance, HandleBleSecureConnect, nullptr, true, &ble));
+    SuccessOrQuit(otBleSecureTcatStart(instance, nullptr));
+
+    // get auth info from cert from TCAT Device
+    TcatAgent::CertificateAuthorizationField deviceAuth;
+    size_t len = sizeof(deviceAuth);
+    SuccessOrQuit(otBleSecureGetThreadAttributeFromOwnCertificate(instance,kCertificateAuthorizationField, reinterpret_cast<uint8_t *>(&deviceAuth), &len));
+
+    // Mock TCAT Commissioner connects to the agent
+    TcatAgent::CertificateAuthorizationField authInfo;
+    memcpy(&authInfo, &commcert1AuthField, sizeof(authInfo));
+    tester->MockCommissionerConnected(authInfo, deviceAuth);
+
+    // a
+    VerifyOrQuit(agent->IsCommandClassAuthorized(MeshCoP::TcatAgent::kGeneral));
+    VerifyOrQuit(!agent->IsCommandClassAuthorized(MeshCoP::TcatAgent::kCommissioning));
+    VerifyOrQuit(!agent->IsCommandClassAuthorized(MeshCoP::TcatAgent::kApplication));
+    VerifyOrQuit(!agent->IsCommandClassAuthorized(MeshCoP::TcatAgent::kExtraction));
+    VerifyOrQuit(!agent->IsCommandClassAuthorized(MeshCoP::TcatAgent::kDecommissioning));
+
+    // provide PSKc proof-of-possession
+    tester->MockCommissionerPskcProof();
+
+    // a
+    VerifyOrQuit(agent->IsCommandClassAuthorized(MeshCoP::TcatAgent::kGeneral));
+    VerifyOrQuit(agent->IsCommandClassAuthorized(MeshCoP::TcatAgent::kCommissioning));
+    VerifyOrQuit(!agent->IsCommandClassAuthorized(MeshCoP::TcatAgent::kApplication));
+    VerifyOrQuit(!agent->IsCommandClassAuthorized(MeshCoP::TcatAgent::kExtraction));
+    VerifyOrQuit(!agent->IsCommandClassAuthorized(MeshCoP::TcatAgent::kDecommissioning));
 
     testFreeInstance(instance);
 }
@@ -196,6 +259,7 @@ int main(void)
 {
 #if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
     ot::TestTcat();
+    ot::TestTcatCommissionerAuth();
     printf("All tests passed\n");
 #else
     printf("Tcat is not enabled\n");
