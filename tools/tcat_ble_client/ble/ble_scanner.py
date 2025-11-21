@@ -48,9 +48,9 @@ async def find_first_by_mac(mac) -> BLEDevice:
     return device
 
 
-async def scan_tcat_devices(adapter: Optional[str] = None):
+async def scan_tcat_devices(adapter: Optional[str] = None) -> list[tuple[BLEDevice, Optional[AdvertisedData]]]:
     scanner = BleakScanner()
-    tcat_devices: list = []
+    tcat_devices: list[tuple[BLEDevice, Optional[AdvertisedData]]] = []
     service_uuids = [normalize_uuid_str(BBTC_SERVICE_UUID)]
     discovered_devices = await scanner.discover(return_adv=True, service_uuids=service_uuids, adapter=adapter)
     for _, (device, adv) in discovered_devices.items():
