@@ -562,6 +562,10 @@ class VirtualTime(BaseSimulator):
         elif type == self.OT_SIM_EVENT_UART_WRITE:
             message += data
             self._send_message(message, port)
+        else:
+            raise NotImplementedError
+
+        self.awake_devices.add(port)
 
     def sync_devices(self):
         self.current_time = self._pause_time
