@@ -43,6 +43,7 @@
 #include <openthread/cli.h>
 
 #include "cli/cli_config.h"
+#include "cli_tcp_server.hpp"
 #include "common/code_utils.hpp"
 
 #include "openthread-core-config.h"
@@ -56,11 +57,26 @@ int OutputCallback(void *aContext, const char *aFormat, va_list aArguments)
 {
     OT_UNUSED_VARIABLE(aContext);
 
+#if OPENTHREAD_CONFIG_TCP_ENABLE && OPENTHREAD_POSIX_CONFIG_CLI_TCP_SERVER_ENABLE
+    // Fan out to TCP client before consuming the va_list with vdprintf.
+    va_list argsCopy;
+    va_copy(argsCopy, aArguments);
+    otAppCliTcpServerOutput(aFormat, argsCopy);
+    va_end(argsCopy);
+#endif
+
     return vdprintf(STDOUT_FILENO, aFormat, aArguments);
 }
 } // namespace
 
-extern "C" void otAppCliInit(otInstance *aInstance) { otCliInit(aInstance, OutputCallback, nullptr); }
+extern "C" void otAppCliInit(otInstance *aInstance)
+{
+    otCliInit(aInstance, OutputCallback, nullptr);
+
+#if OPENTHREAD_CONFIG_TCP_ENABLE && OPENTHREAD_POSIX_CONFIG_CLI_TCP_SERVER_ENABLE
+    otAppCliTcpServerInit(aInstance);
+#endif
+}
 
 extern "C" void otAppCliDeinit(void) {}
 

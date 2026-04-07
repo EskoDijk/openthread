@@ -35,6 +35,7 @@
 #include <openthread/platform/debug_uart.h>
 
 #include "cli/cli_config.h"
+#include "cli_tcp_server.hpp"
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
 #include "utils/uart.h"
@@ -296,6 +297,15 @@ static int CliUartOutput(void *aContext, const char *aFormat, va_list aArguments
 {
     OT_UNUSED_VARIABLE(aContext);
 
+#if OPENTHREAD_CONFIG_TCP_ENABLE && OPENTHREAD_POSIX_CONFIG_CLI_TCP_SERVER_ENABLE
+    {
+        va_list argsCopy;
+        va_copy(argsCopy, aArguments);
+        otAppCliTcpServerOutput(aFormat, argsCopy);
+        va_end(argsCopy);
+    }
+#endif
+
     int rval;
 
     if (sTxLength == 0)
@@ -380,4 +390,8 @@ extern "C" void otAppCliInit(otInstance *aInstance)
     IgnoreError(otPlatUartEnable());
 
     otCliInit(aInstance, CliUartOutput, aInstance);
+
+#if OPENTHREAD_CONFIG_TCP_ENABLE && OPENTHREAD_POSIX_CONFIG_CLI_TCP_SERVER_ENABLE
+    otAppCliTcpServerInit(aInstance);
+#endif
 }

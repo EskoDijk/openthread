@@ -485,6 +485,36 @@
 #endif
 
 //---------------------------------------------------------------------------------------------------------------------
+// TCP CLI server (telnet-style, no security, for development/demo use only).
+
+/**
+ * @def OPENTHREAD_POSIX_CONFIG_CLI_TCP_SERVER_ENABLE
+ *
+ * Set to 1 to enable the TCP CLI server. Requires OPENTHREAD_CONFIG_TCP_ENABLE.
+ */
+#ifndef OPENTHREAD_POSIX_CONFIG_CLI_TCP_SERVER_ENABLE
+#define OPENTHREAD_POSIX_CONFIG_CLI_TCP_SERVER_ENABLE 0
+#endif
+
+/**
+ * @def OPENTHREAD_POSIX_CONFIG_CLI_TCP_SERVER_PORT
+ *
+ * TCP port the CLI server listens on.
+ */
+#ifndef OPENTHREAD_POSIX_CONFIG_CLI_TCP_SERVER_PORT
+#define OPENTHREAD_POSIX_CONFIG_CLI_TCP_SERVER_PORT 23
+#endif
+
+/**
+ * @def OPENTHREAD_POSIX_CONFIG_CLI_TCP_SEND_BUFFER_SIZE
+ *
+ * Size in bytes of the circular TX buffer per TCP CLI connection.
+ */
+#ifndef OPENTHREAD_POSIX_CONFIG_CLI_TCP_SEND_BUFFER_SIZE
+#define OPENTHREAD_POSIX_CONFIG_CLI_TCP_SEND_BUFFER_SIZE 2048
+#endif
+
+//---------------------------------------------------------------------------------------------------------------------
 // Removed or renamed POSIX specific configs.
 
 #ifdef OPENTHREAD_CONFIG_POSIX_APP_TREL_INTERFACE_NAME

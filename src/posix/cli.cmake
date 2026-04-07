@@ -30,9 +30,13 @@ add_executable(ot-cli
     main.c
     cli_readline.cpp
     cli_stdio.cpp
+    ${PROJECT_SOURCE_DIR}/examples/apps/cli/cli_tcp_server.cpp
 )
 
-target_include_directories(ot-cli PRIVATE ${COMMON_INCLUDES})
+target_include_directories(ot-cli PRIVATE
+    ${COMMON_INCLUDES}
+    ${PROJECT_SOURCE_DIR}/examples/apps/cli
+)
 
 if (READLINE)
 target_compile_definitions(ot-cli PRIVATE
@@ -42,6 +46,11 @@ endif()
 target_compile_options(ot-cli PRIVATE
     ${OT_CFLAGS}
 )
+
+# Enable the TCP CLI server when TCP is available.
+if(OT_TCP)
+    target_compile_definitions(ot-cli PRIVATE OPENTHREAD_POSIX_CONFIG_CLI_TCP_SERVER_ENABLE=1)
+endif()
 
 target_link_libraries(ot-cli PRIVATE
     openthread-cli-ftd

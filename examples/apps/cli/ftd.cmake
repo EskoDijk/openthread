@@ -28,6 +28,7 @@
 
 add_executable(ot-cli-ftd
     cli_uart.cpp
+    cli_tcp_server.cpp
     main.c
 )
 
@@ -39,6 +40,11 @@ target_compile_definitions(ot-cli-ftd
         OPENTHREAD_MTD=0
         OPENTHREAD_RADIO=0
 )
+
+# Enable the TCP CLI server when TCP is available.
+if(OT_TCP)
+    target_compile_definitions(ot-cli-ftd PRIVATE OPENTHREAD_POSIX_CONFIG_CLI_TCP_SERVER_ENABLE=1)
+endif()
 
 if(NOT DEFINED OT_PLATFORM_LIB_FTD)
     set(OT_PLATFORM_LIB_FTD ${OT_PLATFORM_LIB})
