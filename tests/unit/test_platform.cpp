@@ -36,6 +36,7 @@
 #ifdef OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
 #include <openthread/tcat.h>
 #include <openthread/platform/ble.h>
+#include <openthread/platform/flash.h>
 #endif
 
 enum
@@ -49,6 +50,13 @@ std::map<uint32_t, std::vector<std::vector<uint8_t>>> settings;
 ot::Instance *testInitInstance(void)
 {
     otInstance *instance = nullptr;
+
+    // erase flash and settings for new instance
+    settings.clear();
+    for (uint8_t idx = 0; idx < FLASH_SWAP_NUM; idx++)
+    {
+        otPlatFlashErase(nullptr, idx);
+    }
 
 #if OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE
 #if OPENTHREAD_CONFIG_MULTIPLE_STATIC_INSTANCE_ENABLE
