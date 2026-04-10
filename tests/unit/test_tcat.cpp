@@ -82,6 +82,8 @@
 namespace ot {
 namespace MeshCoP {
 
+using namespace Ble;
+
 static constexpr char     kPskdVendor[]                  = "J01NM3";
 static constexpr char     kUrl[]                         = "dummy_url";
 static constexpr char     kDomainName[]                  = "DefaultDomain";
@@ -379,6 +381,93 @@ private:
     }
 
 public:
+    static void TestTcatAdvertisementsEnabledDisabled(void)
+    {
+        Instance  *instance = TestInitInstanceTcat();
+        TcatAgent *agent    = &instance->Get<TcatAgent>();
+        BleSecure *ble      = &instance->Get<BleSecure>();
+
+        // Before BLE Secure is started, TCAT is disabled and no advertisements are sent.
+        VerifyOrQuit(!otBleSecureIsTcatAgentStarted(instance));
+        VerifyOrQuit(agent->mState == TcatAgent::kStateDisabled);
+        VerifyOrQuit(ble->GetBleState() == Ble::BleSecure::BleState::kStopped);
+
+        // Start BLE Secure and enable TCAT. The device should immediately enter the active
+        // state and begin sending BLE advertisements.
+        SuccessOrQuit(otBleSecureStart(instance, nullptr, nullptr, true, nullptr));
+        SuccessOrQuit(otBleSecureTcatStart(instance, nullptr));
+        VerifyOrQuit(otBleSecureIsTcatAgentStarted(instance));
+        VerifyOrQuit(agent->mState == TcatAgent::kStateActive);
+        VerifyOrQuit(ble->GetBleState() == Ble::BleSecure::BleState::kAdvertising);
+
+        // Move TCAT to standby: advertisements must stop.
+        SuccessOrQuit(otBleSecureSetTcatAgentState(instance, false, 0, 0));
+        VerifyOrQuit(agent->mState == TcatAgent::kStateStandby);
+        VerifyOrQuit(ble->GetBleState() == Ble::BleSecure::BleState::kNotAdvertising);
+
+        // Re-activate TCAT: advertisements must resume.
+        SuccessOrQuit(otBleSecureSetTcatAgentState(instance, true, 0, 0));
+        VerifyOrQuit(agent->mState == TcatAgent::kStateActive);
+        VerifyOrQuit(ble->GetBleState() == Ble::BleSecure::BleState::kAdvertising);
+
+        // Stopping BLE Secure disables TCAT and ends all advertisements.
+        otBleSecureStop(instance);
+        VerifyOrQuit(!otBleSecureIsTcatAgentStarted(instance));
+        VerifyOrQuit(ble->GetBleState() == Ble::BleSecure::BleState::kStopped);
+
+        testFreeInstance(instance);
+    }
+
+    static void TestTcatAdvertisementsAfterCommissioning(void)
+    {
+        Instance  *instance = TestInitInstanceTcat();
+        TcatAgent *agent    = &instance->Get<TcatAgent>();
+        BleSecure *ble      = &instance->Get<BleSecure>();
+
+        SuccessOrQuit(otBleSecureStart(instance, nullptr, nullptr, true, nullptr));
+        SuccessOrQuit(otBleSecureTcatStart(instance, nullptr));
+        VerifyOrQuit(otBleSecureIsTcatAgentStarted(instance));
+
+        // Commissioner connects - keep advertising, since the application didn't disable TCAT.
+        MockCommissionerConnected(agent, sCommAuth, sDeviceAuth, false);
+        VerifyOrQuit(agent->mState == TcatAgent::kStateConnected);
+        VerifyOrQuit(ble->GetBleState() == Ble::BleSecure::BleState::kAdvertising);
+
+        // Mock action: Commissioner writes partial dataset
+        instance->Get<ActiveDatasetManager>().SaveLocal(sPartialDataset);
+        VerifyOrQuit(agent->mState == TcatAgent::kStateConnected);
+        VerifyOrQuit(ble->GetBleState() == Ble::BleSecure::BleState::kAdvertising);
+
+        // Commissioner disconnects - keep advertising, since the application didn't disable TCAT.
+        agent->Disconnected();
+        VerifyOrQuit(otBleSecureIsTcatAgentStarted(instance));
+        VerifyOrQuit(agent->mState == TcatAgent::kStateActive);
+        VerifyOrQuit(ble->GetBleState() == Ble::BleSecure::BleState::kAdvertising);
+
+        // Commissioner connects again - keep advertising
+        MockCommissionerConnected(agent, sCommAuth, sDeviceAuth, false);
+        VerifyOrQuit(agent->mState == TcatAgent::kStateConnected);
+        VerifyOrQuit(ble->GetBleState() == Ble::BleSecure::BleState::kAdvertising);
+
+        // Mock action: Commissioner writes full dataset
+        instance->Get<ActiveDatasetManager>().SaveLocal(sFullDataset);
+
+        // Commissioner disconnects - Device keeps advertising.
+        agent->Disconnected();
+        VerifyOrQuit(otBleSecureIsTcatAgentStarted(instance));
+        VerifyOrQuit(agent->mState == TcatAgent::kStateActive);
+        VerifyOrQuit(ble->GetBleState() == Ble::BleSecure::BleState::kAdvertising);
+
+        // After a while, the application disables TCAT mode (usually only done once the TCAT Device has found a
+        // Thread Network and successfully connected to it).
+        otBleSecureSetTcatAgentState(instance, false, 0, 0);
+        VerifyOrQuit(otBleSecureIsTcatAgentStarted(instance));
+        VerifyOrQuit(agent->mState == TcatAgent::kStateStandby);
+        VerifyOrQuit(ble->GetBleState() == Ble::BleSecure::BleState::kNotAdvertising);
+
+        testFreeInstance(instance);
+    }
+
     static void TestTcatCommissioner1Auth(void)
     {
         Instance  *instance = TestInitInstanceTcat();
@@ -826,6 +915,8 @@ int main(void)
 {
 #if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
     ot::MeshCoP::TestTcatConnectionAndCertAttributes();
+    ot::MeshCoP::UnitTester::TestTcatAdvertisementsEnabledDisabled();
+    ot::MeshCoP::UnitTester::TestTcatAdvertisementsAfterCommissioning();
     ot::MeshCoP::UnitTester::TestTcatCommissioner1Auth();
     ot::MeshCoP::UnitTester::TestTcatCommissioner2Auth();
     ot::MeshCoP::UnitTester::TestTcatCommissioner4Auth();

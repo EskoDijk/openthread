@@ -76,6 +76,14 @@ public:
      */
     typedef MeshCoP::TcatAgent::CommandClass CommandClass;
 
+    enum BleState : uint8_t
+    {
+        kStopped        = 0, // Ble secure not started (so not advertising).
+        kAdvertising    = 1, // Ble secure is advertising.
+        kConnected      = 2, // Ble secure is connected (so not advertising).
+        kNotAdvertising = 3, // Ble secure is started but not advertising.
+    };
+
     /**
      * Constructor initializes the object.
      *
@@ -191,6 +199,13 @@ public:
      * @retval FALSE  The TCAT agent is disabled on BLE secure.
      */
     bool IsTcatAgentStarted(void) const { return Get<MeshCoP::TcatAgent>().IsStarted(); }
+
+    /**
+     * Get the present state of the BleSecure module.
+     *
+     * @return Present state of the BleSecure module
+     */
+    BleState GetBleState(void) const { return mBleState; }
 
     /**
      * Indicates whether or not a TCAT command class is authorized for use by the current TCAT Commissioner.
@@ -338,14 +353,6 @@ public:
     void NotifySendAdvertisements(bool aSendAdvertisements);
 
 private:
-    enum BleState : uint8_t
-    {
-        kStopped        = 0, // Ble secure not started (so not advertising).
-        kAdvertising    = 1, // Ble secure is advertising.
-        kConnected      = 2, // Ble secure is connected (so not advertising).
-        kNotAdvertising = 3, // Ble secure is started but not advertising.
-    };
-
     static constexpr uint8_t  kInitialMtuSize   = OT_BLE_ATT_MTU_DEFAULT;
     static constexpr uint8_t  kMinMtuSize       = OT_BLE_ATT_MTU_MIN;
     static constexpr uint8_t  kMaxMtuSize       = OT_BLE_ATT_MTU_MAX;
