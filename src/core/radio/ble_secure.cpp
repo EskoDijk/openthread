@@ -207,6 +207,7 @@ exit:
 
 void BleSecure::NotifySendAdvertisements(bool aSendAdvertisements)
 {
+    LogDebg("NotifySendAdvertisements(): requested state %s", aSendAdvertisements ? "kAdvertising" : "kNotAdvertising");
     mBleAdvRequestedState = aSendAdvertisements ? kAdvertising : kNotAdvertising;
     IgnoreError(SetRequestedBleAdvertisementsState());
 }

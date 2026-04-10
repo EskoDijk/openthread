@@ -82,6 +82,8 @@
 namespace ot {
 namespace MeshCoP {
 
+using namespace Ble;
+
 static constexpr char     kPskdVendor[]                  = "J01NM3";
 static constexpr char     kUrl[]                         = "dummy_url";
 static constexpr char     kDomainName[]                  = "DefaultDomain";
@@ -345,15 +347,16 @@ private:
                                           const TcatAgent::CertificateAuthorizationField aDeviceAuth,
                                           bool                                           aIsCommissionedAtStart)
     {
-        aAgent->mState                          = TcatAgent::kStateConnected;
+        // This mock function mimics the steps in TcatAgent::Connected() without requiring the actual TLS
+        // session object.
+        aAgent->ClearCommissionerState();
         aAgent->mCommissionerAuthorizationField = aCommAuth;
         aAgent->mDeviceAuthorizationField       = aDeviceAuth;
-        aAgent->mPskcVerified                   = false;
-        aAgent->mPskdVerified                   = false;
-        aAgent->mCommissionerHasExtendedPanId   = false;
-        aAgent->mCommissionerHasNetworkName     = false;
-        aAgent->mCommissionerHasDomainName      = false;
         aAgent->mIsCommissioned                 = aIsCommissionedAtStart;
+
+        aAgent->mNextState = (aAgent->mState == TcatAgent::kStateActiveTemporary) ? TcatAgent::kStateStandby : TcatAgent::kStateActive;
+        aAgent->mState     = TcatAgent::kStateConnected;
+        aAgent->NotifyStateChange();
     }
 
     // Mock condition: commissioner has or has not the given Extended Pan ID in its certificate.
@@ -378,6 +381,93 @@ private:
     }
 
 public:
+    static void TestTcatAdvertisementsEnabledDisabled(void)
+    {
+        Instance  *instance = TestInitInstanceTcat();
+        TcatAgent *agent    = &instance->Get<TcatAgent>();
+        BleSecure *ble      = &instance->Get<BleSecure>();
+
+        // Before BLE Secure is started, TCAT is disabled and no advertisements are sent.
+        VerifyOrQuit(!otBleSecureIsTcatAgentStarted(instance));
+        VerifyOrQuit(agent->mState == TcatAgent::kStateDisabled);
+        VerifyOrQuit(ble->GetBleState() == Ble::BleSecure::BleState::kStopped);
+
+        // Start BLE Secure and enable TCAT. The device should immediately enter the active
+        // state and begin sending BLE advertisements.
+        SuccessOrQuit(otBleSecureStart(instance, nullptr, nullptr, true, nullptr));
+        SuccessOrQuit(otBleSecureTcatStart(instance, nullptr));
+        VerifyOrQuit(otBleSecureIsTcatAgentStarted(instance));
+        VerifyOrQuit(agent->mState == TcatAgent::kStateActive);
+        VerifyOrQuit(ble->GetBleState() == Ble::BleSecure::BleState::kAdvertising);
+
+        // Move TCAT to standby: advertisements must stop.
+        SuccessOrQuit(otBleSecureSetTcatAgentState(instance, false, 0, 0));
+        VerifyOrQuit(agent->mState == TcatAgent::kStateStandby);
+        VerifyOrQuit(ble->GetBleState() == Ble::BleSecure::BleState::kNotAdvertising);
+
+        // Re-activate TCAT: advertisements must resume.
+        SuccessOrQuit(otBleSecureSetTcatAgentState(instance, true, 0, 0));
+        VerifyOrQuit(agent->mState == TcatAgent::kStateActive);
+        VerifyOrQuit(ble->GetBleState() == Ble::BleSecure::BleState::kAdvertising);
+
+        // Stopping BLE Secure disables TCAT and ends all advertisements.
+        otBleSecureStop(instance);
+        VerifyOrQuit(!otBleSecureIsTcatAgentStarted(instance));
+        VerifyOrQuit(ble->GetBleState() == Ble::BleSecure::BleState::kStopped);
+
+        testFreeInstance(instance);
+    }
+
+    static void TestTcatAdvertisementsAfterCommissioning(void)
+    {
+        Instance  *instance = TestInitInstanceTcat();
+        TcatAgent *agent    = &instance->Get<TcatAgent>();
+        BleSecure *ble      = &instance->Get<BleSecure>();
+
+        SuccessOrQuit(otBleSecureStart(instance, nullptr, nullptr, true, nullptr));
+        SuccessOrQuit(otBleSecureTcatStart(instance, nullptr));
+        VerifyOrQuit(otBleSecureIsTcatAgentStarted(instance));
+
+        // Commissioner connects - keep advertising, since the application didn't disable TCAT.
+        MockCommissionerConnected(agent, sCommAuth, sDeviceAuth, false);
+        VerifyOrQuit(agent->mState == TcatAgent::kStateConnected);
+        VerifyOrQuit(ble->GetBleState() == Ble::BleSecure::BleState::kAdvertising);
+
+        // Mock action: Commissioner writes partial dataset
+        instance->Get<ActiveDatasetManager>().SaveLocal(sPartialDataset);
+        VerifyOrQuit(agent->mState == TcatAgent::kStateConnected);
+        VerifyOrQuit(ble->GetBleState() == Ble::BleSecure::BleState::kAdvertising);
+
+        // Commissioner disconnects - keep advertising, since the application didn't disable TCAT.
+        agent->Disconnected();
+        VerifyOrQuit(otBleSecureIsTcatAgentStarted(instance));
+        VerifyOrQuit(agent->mState == TcatAgent::kStateActive);
+        VerifyOrQuit(ble->GetBleState() == Ble::BleSecure::BleState::kAdvertising);
+
+        // Commissioner connects again - keep advertising
+        MockCommissionerConnected(agent, sCommAuth, sDeviceAuth, false);
+        VerifyOrQuit(agent->mState == TcatAgent::kStateConnected);
+        VerifyOrQuit(ble->GetBleState() == Ble::BleSecure::BleState::kAdvertising);
+
+        // Mock action: Commissioner writes full dataset
+        instance->Get<ActiveDatasetManager>().SaveLocal(sFullDataset);
+
+        // Commissioner disconnects - Device keeps advertising.
+        agent->Disconnected();
+        VerifyOrQuit(otBleSecureIsTcatAgentStarted(instance));
+        VerifyOrQuit(agent->mState == TcatAgent::kStateActive);
+        VerifyOrQuit(ble->GetBleState() == Ble::BleSecure::BleState::kAdvertising);
+
+        // After a while, the application disables TCAT mode (usually only done once the TCAT Device has found a
+        // Thread Network and successfully connected to it).
+        otBleSecureSetTcatAgentState(instance, false, 0, 0);
+        VerifyOrQuit(otBleSecureIsTcatAgentStarted(instance));
+        VerifyOrQuit(agent->mState == TcatAgent::kStateStandby);
+        VerifyOrQuit(ble->GetBleState() == Ble::BleSecure::BleState::kNotAdvertising);
+
+        testFreeInstance(instance);
+    }
+
     static void TestTcatCommissioner1Auth(void)
     {
         Instance  *instance = TestInitInstanceTcat();
@@ -545,6 +635,7 @@ public:
         // Mock TCAT Commissioner 4 connects to the Device - verify it only has access to class General by default.
         // The Device is commissioned already at start of the TCAT Link.
         // =======================================================================================================
+        instance->Get<ActiveDatasetManager>().SaveLocal(sFullDataset);
         memcpy(&sCommAuth, &kCommCert4AuthField, sizeof(sCommAuth));
         MockCommissionerConnected(agent, sCommAuth, sDeviceAuth, true);
         VerifyOrQuit(CommandClassesAuthorized(agent, kClassGeneral));
@@ -740,22 +831,41 @@ public:
         VerifyOrQuit(!SetActiveDatasetAuthorized(agent, sFullDataset));
         VerifyOrQuit(!SetActiveDatasetAuthorized(agent, sPartialDataset));
 
-        // Domain Name match
+        // Domain Name match - but Commissioning in general is still not authorized, due to missing Active Dataset.
+        // Hence the Network Name and XPAN ID checks cannot succeed in general. They will succeed now for the
+        // specific 'Set Active Dataset' command.
         MockDomainName(agent, true, &sCommDomainName);
-        VerifyOrQuit(CommandClassesAuthorized(agent, kClassGeneral | kClassCommissioning));
+        VerifyOrQuit(CommandClassesAuthorized(agent, kClassGeneral));
         VerifyOrQuit(SetActiveDatasetAuthorized(agent, sFullDataset));
+
+        // the partial dataset cannot be written, because it lacks the required Network Name and XPAN ID combo.
         VerifyOrQuit(!SetActiveDatasetAuthorized(agent, sPartialDataset));
 
         // PSKc proof
         agent->mPskcVerified = true;
-        VerifyOrQuit(CommandClassesAuthorized(agent, kClassGeneral | kClassCommissioning | kClassExtraction |
-                                                         kClassDecommissioning | kClassApplication));
+        VerifyOrQuit(CommandClassesAuthorized(agent, kClassGeneral));
         VerifyOrQuit(SetActiveDatasetAuthorized(agent, sFullDataset));
         VerifyOrQuit(!SetActiveDatasetAuthorized(agent, sPartialDataset));
 
-        // Try write a full dataset with differing XPAN ID
+        // Try write a full dataset with differing XPAN ID - this fails
         sFullDataset.mExtendedPanId.m8[2]++;
         VerifyOrQuit(!SetActiveDatasetAuthorized(agent, sFullDataset));
+
+
+        // Test an equivalent case to above where the device does have a full dataset stored already, and the
+        // Commissioner connects. Now it has full access to all classes due to matching Network Name / XPAN ID combo.
+        sFullDataset = AsCoreType(&kFullDataset);
+        instance->Get<ActiveDatasetManager>().SaveLocal(sFullDataset);
+        MockCommissionerConnected(agent, sCommAuth, sDeviceAuth, true);
+        agent->mPskdVerified = true;
+        agent->mPskcVerified = true;
+        MockNetworkName(agent, true, &sCommNetworkName);
+        MockExtPanId(agent, true, &sCommExtPanId);
+        MockDomainName(agent, true, &sCommDomainName);
+
+        VerifyOrQuit(CommandClassesAuthorized(agent, kClassGeneral | kClassCommissioning | kClassDecommissioning | kClassExtraction | kClassApplication));
+        VerifyOrQuit(!SetActiveDatasetAuthorized(agent, sFullDataset));
+        VerifyOrQuit(!SetActiveDatasetAuthorized(agent, sPartialDataset));
 
         testFreeInstance(instance);
     }
@@ -805,6 +915,8 @@ int main(void)
 {
 #if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
     ot::MeshCoP::TestTcatConnectionAndCertAttributes();
+    ot::MeshCoP::UnitTester::TestTcatAdvertisementsEnabledDisabled();
+    ot::MeshCoP::UnitTester::TestTcatAdvertisementsAfterCommissioning();
     ot::MeshCoP::UnitTester::TestTcatCommissioner1Auth();
     ot::MeshCoP::UnitTester::TestTcatCommissioner2Auth();
     ot::MeshCoP::UnitTester::TestTcatCommissioner4Auth();
