@@ -52,7 +52,9 @@ TcatUdpServer::TcatUdpServer(Instance &aInstance)
 {
 }
 
-Error TcatUdpServer::Start(uint16_t aPort, TcatAgent::JoinCallback aJoinHandler)
+Error TcatUdpServer::Start(uint16_t                        aPort,
+                           TcatAgent::AppDataReceiveCallback aAppDataCallback,
+                           TcatAgent::JoinCallback           aJoinHandler)
 {
     Error error;
 
@@ -65,7 +67,7 @@ Error TcatUdpServer::Start(uint16_t aPort, TcatAgent::JoinCallback aJoinHandler)
     mSession.SetConnectCallback(HandleDtlsConnect, this);
     mSession.SetReceiveCallback(HandleDtlsReceive, this);
 
-    SuccessOrExit(error = Get<TcatAgent>().Start(nullptr, aJoinHandler, nullptr));
+    SuccessOrExit(error = Get<TcatAgent>().Start(aAppDataCallback, aJoinHandler, nullptr));
     Get<TcatAgent>().SetStateChangeCallback(nullptr, nullptr); // no advertisement mechanism for UDP
 
 exit:

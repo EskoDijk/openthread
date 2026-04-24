@@ -45,26 +45,6 @@
 
 using namespace ot;
 
-otError otTcatUdpStart(otInstance             *aInstance,
-                       uint16_t                aPort,
-                       const otTcatVendorInfo *aVendorInfo,
-                       otHandleTcatJoin        aJoinHandler)
-{
-    Error error;
-
-    SuccessOrExit(error = AsCoreType(aInstance).Get<MeshCoP::TcatAgent>().SetTcatVendorInfo(
-                      AsCoreType(aVendorInfo)));
-    error = AsCoreType(aInstance).Get<MeshCoP::TcatUdpServer>().Start(aPort, aJoinHandler);
-
-exit:
-    return error;
-}
-
-void otTcatUdpStop(otInstance *aInstance)
-{
-    AsCoreType(aInstance).Get<MeshCoP::TcatUdpServer>().Stop();
-}
-
 otError otTcatUdpSendApplicationTlv(otInstance               *aInstance,
                                     otTcatApplicationProtocol aApplicationProtocol,
                                     uint8_t                  *aBuf,
@@ -72,35 +52,6 @@ otError otTcatUdpSendApplicationTlv(otInstance               *aInstance,
 {
     return AsCoreType(aInstance).Get<MeshCoP::TcatUdpServer>().SendApplicationTlv(
         MapEnum(aApplicationProtocol), aBuf, aLength);
-}
-
-#ifdef MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
-void otTcatUdpSetCertificate(otInstance    *aInstance,
-                             const uint8_t *aX509Cert,
-                             uint32_t       aX509Length,
-                             const uint8_t *aPrivateKey,
-                             uint32_t       aPrivateKeyLength)
-{
-    OT_ASSERT(aX509Cert != nullptr && aX509Length != 0 && aPrivateKey != nullptr && aPrivateKeyLength != 0);
-
-    AsCoreType(aInstance).Get<MeshCoP::TcatUdpServer>().SetCertificate(aX509Cert, aX509Length,
-                                                                        aPrivateKey, aPrivateKeyLength);
-}
-
-void otTcatUdpSetCaCertificateChain(otInstance    *aInstance,
-                                    const uint8_t *aX509CaCertificateChain,
-                                    uint32_t       aX509CaCertChainLength)
-{
-    OT_ASSERT(aX509CaCertificateChain != nullptr && aX509CaCertChainLength != 0);
-
-    AsCoreType(aInstance).Get<MeshCoP::TcatUdpServer>().SetCaCertificateChain(aX509CaCertificateChain,
-                                                                               aX509CaCertChainLength);
-}
-#endif // MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
-
-void otTcatUdpSetSslAuthMode(otInstance *aInstance, bool aVerifyPeerCertificate)
-{
-    AsCoreType(aInstance).Get<MeshCoP::TcatUdpServer>().SetSslAuthMode(aVerifyPeerCertificate);
 }
 
 #endif // OPENTHREAD_CONFIG_TCAT_UDP_ENABLE

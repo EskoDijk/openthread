@@ -71,7 +71,9 @@ public:
      * @retval kErrorAlready      Already started.
      * @retval kErrorInvalidArgs  Vendor info not set, see TcatAgent::SetTcatVendorInfo.
      */
-    Error Start(uint16_t aPort, TcatAgent::JoinCallback aJoinHandler);
+    Error Start(uint16_t                        aPort,
+                TcatAgent::AppDataReceiveCallback aAppDataCallback,
+                TcatAgent::JoinCallback           aJoinHandler);
 
     /**
      * Stops the TCAT UDP server and closes the DTLS transport.

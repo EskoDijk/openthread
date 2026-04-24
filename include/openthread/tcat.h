@@ -276,41 +276,81 @@ otError otTcatSendApplicationTlv(otInstance               *aInstance,
                                  uint16_t                  aLength);
 
 /**
+ * Sets the own x509 certificate and private key for all enabled TCAT transports.
+ *
+ * @param[in] aInstance          A pointer to an OpenThread instance.
+ * @param[in] aX509Cert          PEM-encoded X.509 certificate.
+ * @param[in] aX509Length        Certificate length (including null terminator if PEM).
+ * @param[in] aPrivateKey        PEM-encoded private key.
+ * @param[in] aPrivateKeyLength  Private key length.
+ */
+void otTcatSetCertificate(otInstance    *aInstance,
+                          const uint8_t *aX509Cert,
+                          uint32_t       aX509Length,
+                          const uint8_t *aPrivateKey,
+                          uint32_t       aPrivateKeyLength);
+
+/**
+ * Sets the trusted CA certificate chain for all enabled TCAT transports.
+ *
+ * @param[in] aInstance                A pointer to an OpenThread instance.
+ * @param[in] aX509CaCertificateChain  PEM-encoded CA chain.
+ * @param[in] aX509CaCertChainLength   Chain length.
+ */
+void otTcatSetCaCertificateChain(otInstance    *aInstance,
+                                 const uint8_t *aX509CaCertificateChain,
+                                 uint32_t       aX509CaCertChainLength);
+
+/**
+ * Sets peer certificate verification mode for all enabled TCAT transports.
+ *
+ * @param[in] aInstance              A pointer to an OpenThread instance.
+ * @param[in] aVerifyPeerCertificate TRUE to require peer certificate verification.
+ */
+void otTcatSetSslAuthMode(otInstance *aInstance, bool aVerifyPeerCertificate);
+
+/**
+ * Starts the TCAT agent on all compiled-in transports.
+ *
+ * Vendor info and certificates must be set beforehand via `otTcatSetVendorInfo`,
+ * `otTcatSetCertificate`, etc.
+ *
+ * @param[in] aInstance        A pointer to an OpenThread instance.
+ * @param[in] aUdpPort         UDP port for the DTLS transport (0 = ephemeral). Ignored for BLE.
+ * @param[in] aVendorInfo      Pointer to vendor info (must remain valid while running).
+ * @param[in] aAppDataHandler  Callback invoked when application-layer TCAT data arrives.
+ * @param[in] aJoinHandler     Callback invoked when a network join/leave completes.
+ *
+ * @retval OT_ERROR_NONE          Successfully started.
+ * @retval OT_ERROR_ALREADY       Already started.
+ * @retval OT_ERROR_INVALID_ARGS  Invalid vendor info.
+ */
+otError otTcatStart(otInstance                        *aInstance,
+                    uint16_t                           aUdpPort,
+                    const otTcatVendorInfo            *aVendorInfo,
+                    otHandleTcatApplicationDataReceive aAppDataHandler,
+                    otHandleTcatJoin                   aJoinHandler);
+
+/**
+ * Stops the TCAT agent and all active transports.
+ *
+ * @param[in] aInstance  A pointer to an OpenThread instance.
+ */
+void otTcatStop(otInstance *aInstance);
+
+/**
  * @}
  */
 
 /**
  * @defgroup api-tcat-udp TCAT over UDP/DTLS
  *
- * @brief   Functions for TCAT over UDP/DTLS (no MAC security). Requires
- *          `OPENTHREAD_CONFIG_TCAT_UDP_ENABLE`.
+ * @brief   Transport-specific send function for TCAT over UDP/DTLS. Requires
+ *          `OPENTHREAD_CONFIG_TCAT_UDP_ENABLE`. All other TCAT configuration and
+ *          lifecycle management is done through the generic `api-tcat-generic` API.
  *
  * @{
  */
-
-/**
- * Starts the TCAT UDP/DTLS server and binds it to the given port.
- *
- * @param[in] aInstance     A pointer to an OpenThread instance.
- * @param[in] aPort         UDP port to listen on (e.g. 1234). 0 picks an ephemeral port.
- * @param[in] aVendorInfo   Pointer to vendor info (must remain valid while server is running).
- * @param[in] aJoinHandler  Callback invoked when a network join/leave completes.
- *
- * @retval OT_ERROR_NONE          Successfully started.
- * @retval OT_ERROR_ALREADY       Server already running.
- * @retval OT_ERROR_INVALID_ARGS  Invalid vendor info.
- */
-otError otTcatUdpStart(otInstance             *aInstance,
-                       uint16_t                aPort,
-                       const otTcatVendorInfo *aVendorInfo,
-                       otHandleTcatJoin        aJoinHandler);
-
-/**
- * Stops the TCAT UDP/DTLS server and closes any active session.
- *
- * @param[in] aInstance  A pointer to an OpenThread instance.
- */
-void otTcatUdpStop(otInstance *aInstance);
 
 /**
  * Sends a TCAT application TLV over the active DTLS session.
@@ -328,40 +368,6 @@ otError otTcatUdpSendApplicationTlv(otInstance               *aInstance,
                                     otTcatApplicationProtocol aApplicationProtocol,
                                     uint8_t                  *aBuf,
                                     uint16_t                  aLength);
-
-/**
- * Sets the own x509 certificate and private key for the TCAT UDP/DTLS transport.
- *
- * @param[in] aInstance          A pointer to an OpenThread instance.
- * @param[in] aX509Cert          PEM-encoded X.509 certificate.
- * @param[in] aX509Length        Certificate length (including null terminator if PEM).
- * @param[in] aPrivateKey        PEM-encoded private key.
- * @param[in] aPrivateKeyLength  Private key length.
- */
-void otTcatUdpSetCertificate(otInstance    *aInstance,
-                             const uint8_t *aX509Cert,
-                             uint32_t       aX509Length,
-                             const uint8_t *aPrivateKey,
-                             uint32_t       aPrivateKeyLength);
-
-/**
- * Sets the trusted CA certificate chain for the TCAT UDP/DTLS transport.
- *
- * @param[in] aInstance                A pointer to an OpenThread instance.
- * @param[in] aX509CaCertificateChain  PEM-encoded CA chain.
- * @param[in] aX509CaCertChainLength   Chain length.
- */
-void otTcatUdpSetCaCertificateChain(otInstance    *aInstance,
-                                    const uint8_t *aX509CaCertificateChain,
-                                    uint32_t       aX509CaCertChainLength);
-
-/**
- * Sets peer certificate verification mode for the TCAT UDP/DTLS transport.
- *
- * @param[in] aInstance              A pointer to an OpenThread instance.
- * @param[in] aVerifyPeerCertificate TRUE to require peer certificate verification.
- */
-void otTcatUdpSetSslAuthMode(otInstance *aInstance, bool aVerifyPeerCertificate);
 
 /**
  * @}
