@@ -34,13 +34,15 @@
 #include "common/debug.hpp"
 #include "common/string.hpp"
 
-#include <openthread/ble_secure.h>
 #include <openthread/error.h>
 #include <openthread/netdiag.h>
 #include <openthread/tcat.h>
+#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#include <openthread/ble_secure.h>
 #include <openthread/platform/ble.h>
+#endif
 
-#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE && OPENTHREAD_CONFIG_CLI_BLE_SECURE_ENABLE
+#if OPENTHREAD_CONFIG_TCAT_ENABLE && OPENTHREAD_CONFIG_CLI_TCAT_ENABLE
 
 #define CERT_SET_COUNT 2
 #define CERT_MAX_SIZE 1024
@@ -138,6 +140,7 @@ exit:
     return ret;
 }
 
+#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
 static void HandleBleSecureReceive(otInstance               *aInstance,
                                    const otMessage          *aMessage,
                                    int32_t                   aOffset,
@@ -153,14 +156,15 @@ static void HandleBleSecureReceive(otInstance               *aInstance,
     {
         uint8_t  buf[kTextMaxLen];
         uint16_t nLen = otMessageRead(aMessage, static_cast<uint16_t>(aOffset), buf, sizeof(buf));
-        IgnoreReturnValue(otBleSecureSendApplicationTlv(aInstance, OT_TCAT_APPLICATION_PROTOCOL_RESPONSE, buf, nLen));
+        IgnoreReturnValue(otTcatSendApplicationTlv(aInstance, OT_TCAT_APPLICATION_PROTOCOL_RESPONSE, buf, nLen));
     }
     else if (aTcatApplicationProtocol == OT_TCAT_APPLICATION_PROTOCOL_2)
     {
         uint8_t status = OT_TCAT_STATUS_SUCCESS;
-        IgnoreReturnValue(otBleSecureSendApplicationTlv(aInstance, OT_TCAT_APPLICATION_PROTOCOL_STATUS, &status, 1));
+        IgnoreReturnValue(otTcatSendApplicationTlv(aInstance, OT_TCAT_APPLICATION_PROTOCOL_STATUS, &status, 1));
     }
 }
+#endif // OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
 
 /**
  * @cli tcat advid
@@ -369,20 +373,30 @@ template <> otError Tcat::Process<Cmd("start")>(Arg aArgs[])
         mVendorInfo.mGeneralDeviceId = &sGeneralDeviceId;
     }
 
+    SuccessOrExit(error = otTcatSetVendorInfo(GetInstancePtr(), &mVendorInfo));
+
+#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
     otBleSecureSetCertificate(GetInstancePtr(), reinterpret_cast<const uint8_t *>(OT_CLI_TCAT_X509_CERT[mSelectedCert]),
                               StringLength(OT_CLI_TCAT_X509_CERT[mSelectedCert], CERT_MAX_SIZE) + 1,
                               reinterpret_cast<const uint8_t *>(OT_CLI_TCAT_PRIV_KEY[mSelectedCert]),
                               StringLength(OT_CLI_TCAT_PRIV_KEY[mSelectedCert], KEY_MAX_SIZE) + 1);
-
     otBleSecureSetCaCertificateChain(GetInstancePtr(),
                                      reinterpret_cast<const uint8_t *>(OT_CLI_TCAT_TRUSTED_ROOT_CERTIFICATE),
                                      sizeof(OT_CLI_TCAT_TRUSTED_ROOT_CERTIFICATE));
-
     otBleSecureSetSslAuthMode(GetInstancePtr(), true);
-
-    SuccessOrExit(error = otBleSecureSetTcatVendorInfo(GetInstancePtr(), &mVendorInfo));
     SuccessOrExit(error = otBleSecureStart(GetInstancePtr(), nullptr, HandleBleSecureReceive, true, nullptr));
     SuccessOrExit(error = otBleSecureTcatStart(GetInstancePtr(), nullptr));
+#elif OPENTHREAD_CONFIG_TCAT_UDP_ENABLE
+    otTcatUdpSetCertificate(GetInstancePtr(), reinterpret_cast<const uint8_t *>(OT_CLI_TCAT_X509_CERT[mSelectedCert]),
+                            StringLength(OT_CLI_TCAT_X509_CERT[mSelectedCert], CERT_MAX_SIZE) + 1,
+                            reinterpret_cast<const uint8_t *>(OT_CLI_TCAT_PRIV_KEY[mSelectedCert]),
+                            StringLength(OT_CLI_TCAT_PRIV_KEY[mSelectedCert], KEY_MAX_SIZE) + 1);
+    otTcatUdpSetCaCertificateChain(GetInstancePtr(),
+                                   reinterpret_cast<const uint8_t *>(OT_CLI_TCAT_TRUSTED_ROOT_CERTIFICATE),
+                                   sizeof(OT_CLI_TCAT_TRUSTED_ROOT_CERTIFICATE));
+    otTcatUdpSetSslAuthMode(GetInstancePtr(), true);
+    SuccessOrExit(error = otTcatUdpStart(GetInstancePtr(), 0, &mVendorInfo, nullptr));
+#endif
 
 exit:
     return error;
@@ -403,7 +417,11 @@ template <> otError Tcat::Process<Cmd("stop")>(Arg aArgs[])
     otError error = OT_ERROR_NONE;
 
     VerifyOrExit(aArgs[0].IsEmpty(), error = OT_ERROR_INVALID_ARGS);
+#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
     otBleSecureStop(GetInstancePtr());
+#elif OPENTHREAD_CONFIG_TCAT_UDP_ENABLE
+    otTcatUdpStop(GetInstancePtr());
+#endif
 
 exit:
     return error;
@@ -424,7 +442,7 @@ template <> otError Tcat::Process<Cmd("standby")>(Arg aArgs[])
     otError error;
 
     VerifyOrExit(aArgs[0].IsEmpty(), error = OT_ERROR_INVALID_ARGS);
-    error = otBleSecureSetTcatAgentState(GetInstancePtr(), false, 0, 0);
+    error = otTcatSetAgentState(GetInstancePtr(), false, 0, 0);
 
 exit:
     return error;
@@ -468,7 +486,7 @@ template <> otError Tcat::Process<Cmd("active")>(Arg aArgs[])
         }
     }
 
-    error = otBleSecureSetTcatAgentState(GetInstancePtr(), true, delay, duration);
+    error = otTcatSetAgentState(GetInstancePtr(), true, delay, duration);
 
 exit:
     return error;
@@ -506,4 +524,4 @@ exit:
 
 } // namespace Cli
 } // namespace ot
-#endif // OPENTHREAD_CONFIG_BLE_TCAT_ENABLE && OPENTHREAD_CONFIG_CLI_BLE_SECURE_ENABLE
+#endif // OPENTHREAD_CONFIG_TCAT_ENABLE && OPENTHREAD_CONFIG_CLI_TCAT_ENABLE

@@ -200,7 +200,7 @@ private:
         }
 
     private:
-#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#if OPENTHREAD_CONFIG_TCAT_ENABLE
         static constexpr uint16_t kMaxDataSize = 1024;
 #else
         static constexpr uint16_t kMaxDataSize = 256;

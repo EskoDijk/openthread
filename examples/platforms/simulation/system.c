@@ -206,12 +206,18 @@ void otSysInit(int aArgCount, char *aArgVector[])
     platformInfraIfInit();
 #endif
     platformRandomInit();
+#if OPENTHREAD_CONFIG_TCAT_UDP_ENABLE
+    platformTcatUdpInit();
+#endif
 }
 
 bool otSysPseudoResetWasRequested(void) { return gPlatformPseudoResetWasRequested; }
 
 void otSysDeinit(void)
 {
+#if OPENTHREAD_CONFIG_TCAT_UDP_ENABLE
+    platformTcatUdpDeinit();
+#endif
     platformRadioDeinit();
 #if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
     platformTrelDeinit();
@@ -279,6 +285,9 @@ void otSysUpdateEvents(otInstance     *aInstance,
 #if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
     platformBleUpdateFdSet(aReadFdSet, aWriteFdSet, aTimeout, aMaxFd);
 #endif
+#if OPENTHREAD_CONFIG_TCAT_UDP_ENABLE
+    platformTcatUdpUpdateFdSet(aReadFdSet, aWriteFdSet, aTimeout, aMaxFd);
+#endif
     if (otTaskletsArePending(aInstance))
     {
         aTimeout->tv_sec  = 0;
@@ -299,6 +308,9 @@ void otSysProcessEvents(otInstance   *aInstance,
     platformRadioProcess(aInstance, aReadFdSet, aWriteFdSet);
 #if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
     platformBleProcess(aInstance, aReadFdSet, aWriteFdSet);
+#endif
+#if OPENTHREAD_CONFIG_TCAT_UDP_ENABLE
+    platformTcatUdpProcess(aInstance, aReadFdSet, aWriteFdSet);
 #endif
 
     platformAlarmProcess(aInstance);

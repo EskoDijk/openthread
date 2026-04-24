@@ -32,7 +32,7 @@
  *  This file defines the top-level functions for the OpenThread TCAT.
  *
  *  @note
- *   The functions in this module require the build-time feature `OPENTHREAD_CONFIG_BLE_TCAT_ENABLE=1`.
+ *   The functions in this module require the build-time feature `OPENTHREAD_CONFIG_TCAT_ENABLE=1`.
  *
  *  @note
  *   To enable the required cipher suite TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
@@ -60,7 +60,7 @@ extern "C" {
  *   This module includes functions that implement TCAT communication.
  *
  *   The functions in this module are available when TCAT feature
- *   (`OPENTHREAD_CONFIG_BLE_TCAT_ENABLE`) is enabled.
+ *   (`OPENTHREAD_CONFIG_TCAT_ENABLE`) is enabled.
  *
  * @{
  */
@@ -214,6 +214,173 @@ typedef void (*otHandleTcatApplicationDataReceive)(otInstance               *aIn
  * @param[in]  aContext         A pointer to arbitrary context information.
  */
 typedef void (*otHandleTcatJoin)(otError aError, void *aContext);
+
+/**
+ * @}
+ */
+
+/**
+ * @defgroup api-tcat-generic TCAT generic API
+ *
+ * @brief   Transport-agnostic TCAT functions. Available whenever any TCAT transport is enabled
+ *          (`OPENTHREAD_CONFIG_TCAT_ENABLE`).
+ *
+ * @{
+ */
+
+/**
+ * Sets the TCAT vendor info used by the TCAT agent.
+ *
+ * Must be called before starting any TCAT transport. The pointed-to structure must remain
+ * valid for the lifetime of the agent.
+ *
+ * @param[in] aInstance    A pointer to an OpenThread instance.
+ * @param[in] aVendorInfo  Pointer to the vendor info.
+ *
+ * @retval OT_ERROR_NONE          Successfully set.
+ * @retval OT_ERROR_INVALID_ARGS  Invalid vendor info.
+ */
+otError otTcatSetVendorInfo(otInstance *aInstance, const otTcatVendorInfo *aVendorInfo);
+
+/**
+ * Sets the TCAT agent into active or standby state.
+ *
+ * @param[in] aInstance    A pointer to an OpenThread instance.
+ * @param[in] aActive      TRUE to activate, FALSE to go to standby.
+ * @param[in] aDelayMs     Delay in ms before activating (0 = immediate). Ignored when going to standby.
+ * @param[in] aDurationMs  Duration in ms to stay active (0 = indefinite). Ignored when going to standby.
+ *
+ * @retval OT_ERROR_NONE           Successfully applied.
+ * @retval OT_ERROR_INVALID_STATE  TCAT agent not started.
+ */
+otError otTcatSetAgentState(otInstance *aInstance, bool aActive, uint32_t aDelayMs, uint32_t aDurationMs);
+
+/**
+ * Sends a TCAT application TLV over the currently active transport.
+ *
+ * Routes to whichever TCAT transport was compiled in. If both BLE and UDP are compiled in this
+ * call goes to BLE; use the transport-specific API if explicit routing is needed.
+ *
+ * @param[in] aInstance             A pointer to an OpenThread instance.
+ * @param[in] aApplicationProtocol  Application protocol selector.
+ * @param[in] aBuf                  Payload buffer.
+ * @param[in] aLength               Payload length in bytes.
+ *
+ * @retval OT_ERROR_NONE           Successfully enqueued.
+ * @retval OT_ERROR_NO_BUFS        Buffer allocation failure.
+ * @retval OT_ERROR_INVALID_STATE  Not connected.
+ */
+otError otTcatSendApplicationTlv(otInstance               *aInstance,
+                                 otTcatApplicationProtocol aApplicationProtocol,
+                                 uint8_t                  *aBuf,
+                                 uint16_t                  aLength);
+
+/**
+ * @}
+ */
+
+/**
+ * @defgroup api-tcat-udp TCAT over UDP/DTLS
+ *
+ * @brief   Functions for TCAT over UDP/DTLS (no MAC security). Requires
+ *          `OPENTHREAD_CONFIG_TCAT_UDP_ENABLE`.
+ *
+ * @{
+ */
+
+/**
+ * Starts the TCAT UDP/DTLS server and binds it to the given port.
+ *
+ * @param[in] aInstance     A pointer to an OpenThread instance.
+ * @param[in] aPort         UDP port to listen on (e.g. 1234). 0 picks an ephemeral port.
+ * @param[in] aVendorInfo   Pointer to vendor info (must remain valid while server is running).
+ * @param[in] aJoinHandler  Callback invoked when a network join/leave completes.
+ *
+ * @retval OT_ERROR_NONE          Successfully started.
+ * @retval OT_ERROR_ALREADY       Server already running.
+ * @retval OT_ERROR_INVALID_ARGS  Invalid vendor info.
+ */
+otError otTcatUdpStart(otInstance             *aInstance,
+                       uint16_t                aPort,
+                       const otTcatVendorInfo *aVendorInfo,
+                       otHandleTcatJoin        aJoinHandler);
+
+/**
+ * Stops the TCAT UDP/DTLS server and closes any active session.
+ *
+ * @param[in] aInstance  A pointer to an OpenThread instance.
+ */
+void otTcatUdpStop(otInstance *aInstance);
+
+/**
+ * Sends a TCAT application TLV over the active DTLS session.
+ *
+ * @param[in] aInstance             A pointer to an OpenThread instance.
+ * @param[in] aApplicationProtocol  Application protocol selector.
+ * @param[in] aBuf                  Payload buffer.
+ * @param[in] aLength               Payload length in bytes.
+ *
+ * @retval OT_ERROR_NONE           Successfully enqueued.
+ * @retval OT_ERROR_NO_BUFS        Buffer allocation failure.
+ * @retval OT_ERROR_INVALID_STATE  Not connected.
+ */
+otError otTcatUdpSendApplicationTlv(otInstance               *aInstance,
+                                    otTcatApplicationProtocol aApplicationProtocol,
+                                    uint8_t                  *aBuf,
+                                    uint16_t                  aLength);
+
+/**
+ * Sets the own x509 certificate and private key for the TCAT UDP/DTLS transport.
+ *
+ * @param[in] aInstance          A pointer to an OpenThread instance.
+ * @param[in] aX509Cert          PEM-encoded X.509 certificate.
+ * @param[in] aX509Length        Certificate length (including null terminator if PEM).
+ * @param[in] aPrivateKey        PEM-encoded private key.
+ * @param[in] aPrivateKeyLength  Private key length.
+ */
+void otTcatUdpSetCertificate(otInstance    *aInstance,
+                             const uint8_t *aX509Cert,
+                             uint32_t       aX509Length,
+                             const uint8_t *aPrivateKey,
+                             uint32_t       aPrivateKeyLength);
+
+/**
+ * Sets the trusted CA certificate chain for the TCAT UDP/DTLS transport.
+ *
+ * @param[in] aInstance                A pointer to an OpenThread instance.
+ * @param[in] aX509CaCertificateChain  PEM-encoded CA chain.
+ * @param[in] aX509CaCertChainLength   Chain length.
+ */
+void otTcatUdpSetCaCertificateChain(otInstance    *aInstance,
+                                    const uint8_t *aX509CaCertificateChain,
+                                    uint32_t       aX509CaCertChainLength);
+
+/**
+ * Sets peer certificate verification mode for the TCAT UDP/DTLS transport.
+ *
+ * @param[in] aInstance              A pointer to an OpenThread instance.
+ * @param[in] aVerifyPeerCertificate TRUE to require peer certificate verification.
+ */
+void otTcatUdpSetSslAuthMode(otInstance *aInstance, bool aVerifyPeerCertificate);
+
+/**
+ * Injects a received raw DTLS packet from the simulation host socket.
+ *
+ * Only meaningful on simulation builds (`OPENTHREAD_EXAMPLES_SIMULATION`). The simulation
+ * platform calls this after receiving data on its host UDP socket so that the bytes
+ * pass through the OT DTLS state machine.
+ *
+ * @param[in] aInstance  A pointer to an OpenThread instance.
+ * @param[in] aBuf       Raw DTLS record received from the host commissioner.
+ * @param[in] aLen       Length of @p aBuf.
+ * @param[in] aSrcIp4    Source IPv4 address in network byte order.
+ * @param[in] aSrcPort   Source UDP port in host byte order.
+ */
+void otTcatUdpSimInjectReceived(otInstance    *aInstance,
+                                const uint8_t *aBuf,
+                                uint16_t       aLen,
+                                uint32_t       aSrcIp4,
+                                uint16_t       aSrcPort);
 
 /**
  * @}

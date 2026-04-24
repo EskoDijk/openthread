@@ -15,3 +15,4 @@ bleak = "^1.0"
 pytest ="^8.4"
 cryptography = "^46.0"
 pyreadline3 = { version = "^3.5", platform = "win32" }
+python-mbedtls = "^2.10.1"

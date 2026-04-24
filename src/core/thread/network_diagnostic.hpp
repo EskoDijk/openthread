@@ -143,7 +143,7 @@ private:
     Error AppendIp6AddressList(Message &aMessage);
     Error AppendRequestedTlvs(const Message &aRequest, Message &aResponse);
 
-#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#if OPENTHREAD_CONFIG_TCAT_ENABLE
     Error AppendRequestedTlvsForTcat(const Message &aRequest, Message &aResponse, OffsetRange &aOffsetRange);
 #endif
 
@@ -162,7 +162,7 @@ private:
     Error AppendChildIp6AddressListTlv(Message &aAnswer, const Child &aChild);
     Error AppendEnhancedRoute(Message &aMessage);
 
-#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#if OPENTHREAD_CONFIG_TCAT_ENABLE
     Error AppendChildTableAsChildTlvs(Message &aMessage);
     Error AppendRouterNeighborTlvs(Message &aMessage);
     Error AppendChildTableIp6AddressList(Message &aMessage);

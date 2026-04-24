@@ -33,6 +33,7 @@ import logging
 from bleak import BLEDevice
 
 from ble.ble_stream_secure import BleStreamSecure
+from ble.dtls_stream import DtlsStream
 from ble.udp_stream import UdpStream
 from ble import ble_scanner
 from cli.cli import CLI
@@ -60,6 +61,7 @@ async def main():
     group.add_argument('--name', type=str, help='Device name', action='store')
     group.add_argument('--scan', help='Scan all available devices', action='store_true')
     group.add_argument('--simulation', help='Connect to simulation node id', action='store')
+    group.add_argument('--dtls', help='Connect via DTLS over UDP to simulation node id', action='store')
     args = parser.parse_args()
 
     if args.debug:
@@ -134,7 +136,7 @@ def validate_unsolicited_tlv(tlv: TLV):
         logger.error(f"Error: Illegal unsolicited TLV type sent by TCAT Device: {hex(tlv.type)}")
 
 
-async def get_device_by_args(args) -> BLEDevice | UdpStream | None:
+async def get_device_by_args(args) -> BLEDevice | UdpStream | DtlsStream | None:
     device = None
     if args.mac:
         device = await ble_scanner.find_first_by_mac(args.mac)
@@ -145,6 +147,8 @@ async def get_device_by_args(args) -> BLEDevice | UdpStream | None:
         device = select_device_by_user_input(tcat_devices)
     elif args.simulation:
         device = UdpStream("127.0.0.1", int(args.simulation))
+    elif args.dtls:
+        device = DtlsStream("127.0.0.1", int(args.dtls))
 
     return device
 

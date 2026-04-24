@@ -354,6 +354,37 @@ void platformBleUpdateFdSet(fd_set *aReadFdSet, fd_set *aWriteFdSet, struct time
  */
 void platformBleProcess(otInstance *aInstance, const fd_set *aReadFdSet, const fd_set *aWriteFdSet);
 
+#if OPENTHREAD_CONFIG_TCAT_UDP_ENABLE
+/**
+ * Initialises the TCAT UDP simulation host socket (port 11000 + node-id).
+ */
+void platformTcatUdpInit(void);
+
+/**
+ * Shuts down the TCAT UDP simulation host socket.
+ */
+void platformTcatUdpDeinit(void);
+
+/**
+ * Updates the file descriptor sets for the TCAT UDP simulation socket.
+ *
+ * @param[in,out]  aReadFdSet   A pointer to the read file descriptors.
+ * @param[in,out]  aWriteFdSet  A pointer to the write file descriptors.
+ * @param[in,out]  aTimeout     A pointer to the timeout.
+ * @param[in,out]  aMaxFd       A pointer to the max file descriptor.
+ */
+void platformTcatUdpUpdateFdSet(fd_set *aReadFdSet, fd_set *aWriteFdSet, struct timeval *aTimeout, int *aMaxFd);
+
+/**
+ * Performs TCAT UDP simulation socket processing.
+ *
+ * @param[in]  aInstance    The OpenThread instance structure.
+ * @param[in]  aReadFdSet   A pointer to the read file descriptors.
+ * @param[in]  aWriteFdSet  A pointer to the write file descriptors.
+ */
+void platformTcatUdpProcess(otInstance *aInstance, const fd_set *aReadFdSet, const fd_set *aWriteFdSet);
+#endif // OPENTHREAD_CONFIG_TCAT_UDP_ENABLE
+
 /**
  * Send bytes over Virtual UART.
  *

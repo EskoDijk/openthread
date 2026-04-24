@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2021, The OpenThread Authors.
+ *  Copyright (c) 2024, The OpenThread Authors.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -28,49 +28,49 @@
 
 /**
  * @file
- *   This file includes compile-time configurations for TLS/DTLS.
- */
-
-#ifndef OT_CORE_CONFIG_SECURE_TRANSPORT_H_
-#define OT_CORE_CONFIG_SECURE_TRANSPORT_H_
-
-/**
- * @addtogroup config-secure-transport
- *
  * @brief
- *   This module includes configuration variables for Secure Transport.
+ *   Platform abstraction for TCAT UDP/DTLS outgoing packet delivery.
  *
- * @{
+ *   This header is only relevant for platforms that implement TCAT over UDP
+ *   using the simulation callback transport mode (where OT core does not own
+ *   the host socket and instead delegates TX to the platform layer).
  */
 
-#include "config/border_agent.h"
-#include "config/coap.h"
-#include "config/commissioner.h"
-#include "config/joiner.h"
+#ifndef OPENTHREAD_PLATFORM_TCAT_UDP_H_
+#define OPENTHREAD_PLATFORM_TCAT_UDP_H_
 
-/**
- * @def OPENTHREAD_CONFIG_DTLS_MAX_CONTENT_LEN
- *
- * The max length of the OpenThread dtls content buffer.
- */
-#ifndef OPENTHREAD_CONFIG_DTLS_MAX_CONTENT_LEN
-#define OPENTHREAD_CONFIG_DTLS_MAX_CONTENT_LEN MBEDTLS_SSL_IN_CONTENT_LEN
+#include <stdint.h>
+#include <openthread/instance.h>
+
+#ifdef __cplusplus
+extern "C" {
 #endif
 
 /**
- * @def OPENTHREAD_CONFIG_SECURE_TRANSPORT_ENABLE
+ * Sends an outgoing DTLS packet to the TCAT commissioner on the host.
  *
- *  Define to 1 to enable DTLS/TLS.
+ * Called by OT core (`TcatUdpServer`) when the DTLS state machine produces
+ * an outgoing record. The platform is responsible for delivering the raw
+ * bytes to the destination via whatever host mechanism it uses (e.g. a
+ * host-side UDP socket in simulation).
+ *
+ * A default weak no-op implementation is provided for platforms that use
+ * the socket-based transport mode and never call this function.
+ *
+ * @param[in] aInstance  The OT instance.
+ * @param[in] aBuf       Pointer to the raw DTLS record bytes.
+ * @param[in] aLen       Length of @p aBuf in bytes.
+ * @param[in] aDstIp4    Destination IPv4 address in network byte order.
+ * @param[in] aDstPort   Destination UDP port in host byte order.
  */
-#ifndef OPENTHREAD_CONFIG_SECURE_TRANSPORT_ENABLE
-#define OPENTHREAD_CONFIG_SECURE_TRANSPORT_ENABLE                                         \
-    (OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE || OPENTHREAD_CONFIG_BORDER_AGENT_ENABLE || \
-     OPENTHREAD_CONFIG_COMMISSIONER_ENABLE || OPENTHREAD_CONFIG_JOINER_ENABLE ||          \
-     OPENTHREAD_CONFIG_TCAT_ENABLE)
+void otPlatTcatUdpSend(otInstance    *aInstance,
+                       const uint8_t *aBuf,
+                       uint16_t       aLen,
+                       uint32_t       aDstIp4,
+                       uint16_t       aDstPort);
+
+#ifdef __cplusplus
+}
 #endif
 
-/**
- * @}
- */
-
-#endif // OT_CORE_CONFIG_SECURE_TRANSPORT_H_
+#endif // OPENTHREAD_PLATFORM_TCAT_UDP_H_

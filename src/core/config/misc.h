@@ -599,6 +599,23 @@
 #endif
 
 /**
+ * @def OPENTHREAD_CONFIG_TCAT_UDP_ENABLE
+ *
+ * Define to 1 to enable TCAT over UDP/DTLS support.
+ */
+#ifndef OPENTHREAD_CONFIG_TCAT_UDP_ENABLE
+#define OPENTHREAD_CONFIG_TCAT_UDP_ENABLE 0
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_TCAT_ENABLE
+ *
+ * Derived flag: 1 when any TCAT transport (BLE, UDP, …) is enabled.
+ * Do not define this directly; set the transport-specific flags instead.
+ */
+#define OPENTHREAD_CONFIG_TCAT_ENABLE (OPENTHREAD_CONFIG_BLE_TCAT_ENABLE || OPENTHREAD_CONFIG_TCAT_UDP_ENABLE)
+
+/**
  * @def OPENTHREAD_CONFIG_PLATFORM_LOG_CRASH_DUMP_ENABLE
  *
  * Define to 1 to enable crash dump logging.
