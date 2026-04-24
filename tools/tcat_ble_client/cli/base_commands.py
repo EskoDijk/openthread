@@ -40,6 +40,7 @@ from ble.ble_connection_constants import BBTC_SERVICE_UUID, BBTC_TX_CHAR_UUID, B
 from ble.ble_stream import BleStream
 from ble.ble_stream_secure import BleStreamSecure
 from ble import ble_scanner
+from ble.coaps_stream import CoapsStream
 from ble.dtls_stream import DtlsStream
 from ble.udp_stream import UdpStream
 from cli.command import Command, CommandResultNone, CommandResultTLV, CommandResult, CommandResultError
@@ -457,22 +458,22 @@ def _handshake_progress_bar(is_concluded: bool):
         print('.', end='', flush=True)
 
 
-async def connect_helper(device: BLEDevice | UdpStream | DtlsStream,
+async def connect_helper(device: BLEDevice | UdpStream | DtlsStream | CoapsStream,
                          context: dict,
                          timeout_ble=30.0,
                          timeout_simulation=5.0,
                          timeout_dtls=10.0) -> bool:
     """Helper function for CLI and commands to establish a new secure connection with a TCAT device.
 
-    Handles BLE, simulated UDP, and DTLS connections. Loads certificates and performs handshake
-    to establish a secure channel. Connection objects are stored in the context dictionary.
+    Handles BLE, simulated UDP, DTLS, and CoAPS connections. Loads certificates and performs
+    handshake to establish a secure channel. Connection objects are stored in the context dictionary.
 
     Args:
-        device: BLEDevice, UdpStream (simulation), or DtlsStream (DTLS over UDP)
+        device: BLEDevice, UdpStream (simulation), DtlsStream, or CoapsStream
         context: Dictionary containing application context including command line arguments
         timeout_ble: Timeout in seconds for handshake with real TCAT device (default: 30.0)
         timeout_simulation: Timeout in seconds for handshake for simulated TCAT device (default: 5.0)
-        timeout_dtls: Timeout in seconds for DTLS handshake (default: 10.0)
+        timeout_dtls: Timeout in seconds for DTLS/CoAPS handshake (default: 10.0)
 
     Returns:
         True if connection was successful, False otherwise.
@@ -481,7 +482,7 @@ async def connect_helper(device: BLEDevice | UdpStream | DtlsStream,
         Exception: If certificates cannot be loaded
     """
     is_simulation = isinstance(device, UdpStream)
-    is_dtls = isinstance(device, DtlsStream)
+    is_dtls = isinstance(device, (DtlsStream, CoapsStream))
     is_debug = logger.getEffectiveLevel() <= logging.DEBUG
 
     cert_path = context['cmd_args'].cert_path if context['cmd_args'] else 'auth'
