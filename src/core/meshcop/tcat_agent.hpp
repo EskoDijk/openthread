@@ -36,11 +36,10 @@
 
 #include "openthread-core-config.h"
 
-#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#if OPENTHREAD_CONFIG_TCAT_ENABLE
 
 #include <openthread/netdiag.h>
 #include <openthread/tcat.h>
-#include <openthread/platform/ble.h>
 
 #include "common/as_core_type.hpp"
 #include "common/callback.hpp"
@@ -63,11 +62,13 @@ class BleSecure;
 
 namespace MeshCoP {
 
+class TcatUdpServer;
 class UnitTester;
 
 class TcatAgent : public InstanceLocator, private NonCopyable
 {
     friend class Ble::BleSecure;
+    friend class TcatUdpServer;
     friend class UnitTester;
 
 public:
@@ -403,8 +404,9 @@ public:
      */
     bool IsSetActiveDatasetAuthorized(const Dataset *aDataset) const;
 
+#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
     /**
-     * Gets TCAT advertisement data from the TCAT agent.
+     * Gets TCAT advertisement data from the TCAT agent (BLE-specific).
      *
      * @param[out] aLen               Advertisement data length (up to OT_TCAT_ADVERTISEMENT_MAX_LEN).
      * @param[out] aAdvertisementData Advertisement data.
@@ -413,6 +415,7 @@ public:
      * @retval kErrorInvalidArgs    The vendor data could not be retrieved, or aAdvertisementData is null.
      */
     Error GetAdvertisementData(uint16_t &aLen, uint8_t *aAdvertisementData) const;
+#endif
 
     /**
      * @brief Gets the Install Code Verify Status of the current TCAT Commissioner session.
@@ -435,10 +438,34 @@ public:
     template <Uri kUri> void HandleTmf(Coap::Msg &aMsg);
 
 private:
+    /**
+     * Callback type invoked when the TCAT agent state changes between active/inactive.
+     *
+     * @param[in] aActive   TRUE when TCAT is active (advertising/connected), FALSE otherwise.
+     * @param[in] aContext  Application-specific context pointer.
+     */
+    typedef void (*StateChangeCallback)(bool aActive, void *aContext);
+
+    /**
+     * Registers a callback invoked when the TCAT state changes.
+     *
+     * The transport layer uses this to react to state changes (e.g. start/stop BLE advertisements
+     * or a UDP service announcement). Only one callback is active at a time; registering a new one
+     * replaces the previous one.
+     *
+     * @param[in] aCallback  The callback function, or nullptr to clear.
+     * @param[in] aContext   Arbitrary context passed to the callback.
+     */
+    void SetStateChangeCallback(StateChangeCallback aCallback, void *aContext)
+    {
+        mStateChangeCallback.Set(aCallback, aContext);
+    }
+
+private:
     void  NotifyApplicationResponseSent(void) { mApplicationResponsePending = false; }
     void  NotifyStateChange(void);
     void  ClearCommissionerState();
-    Error Connected(MeshCoP::Tls::Extension &aTls);
+    Error Connected(SecureTransport::Extension &aTls);
     void  Disconnected(void);
 
     Error HandleSingleTlv(const Message &aIncomingMessage, Message &aOutgoingMessage);
@@ -504,6 +531,8 @@ private:
     const VendorInfo                *mVendorInfo;
     Callback<JoinCallback>           mJoinCallback;
     Callback<AppDataReceiveCallback> mAppDataReceiveCallback;
+    Callback<StateChangeCallback>    mStateChangeCallback;
+    SecureTransport::Extension      *mActiveExtension;
     CertificateAuthorizationField    mCommissionerAuthorizationField;
     CertificateAuthorizationField    mDeviceAuthorizationField;
     NetworkName                      mCommissionerNetworkName;
@@ -572,6 +601,6 @@ DefineMapEnum(otTcatAdvertisedDeviceIdType, MeshCoP::TcatAgent::TcatDeviceIdType
 
 } // namespace ot
 
-#endif // OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#endif // OPENTHREAD_CONFIG_TCAT_ENABLE
 
 #endif // OT_CORE_MESHCOP_TCAT_AGENT_HPP_

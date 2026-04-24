@@ -141,7 +141,7 @@ exit:
     return error;
 }
 
-#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#if OPENTHREAD_CONFIG_TCAT_ENABLE
 Error Server::AppendChildTableAsChildTlvs(Message &aMessage)
 {
     Error         error = kErrorNone;
@@ -194,7 +194,7 @@ Error Server::AppendChildTableIp6AddressList(Message &aMessage)
 exit:
     return error;
 }
-#endif // OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#endif // OPENTHREAD_CONFIG_TCAT_ENABLE
 #endif // OPENTHREAD_FTD
 
 #if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
@@ -279,7 +279,7 @@ exit:
     return error;
 }
 
-#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#if OPENTHREAD_CONFIG_TCAT_ENABLE
 Error Server::AppendRequestedTlvsForTcat(const Message &aRequest, Message &aResponse, OffsetRange &aOffsetRange)
 {
     Error               error = kErrorNone;
@@ -318,7 +318,7 @@ Error Server::AppendRequestedTlvsForTcat(const Message &aRequest, Message &aResp
 exit:
     return error;
 }
-#endif // OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#endif // OPENTHREAD_CONFIG_TCAT_ENABLE
 
 Error Server::AppendDiagTlv(uint8_t aTlvType, Message &aMessage)
 {

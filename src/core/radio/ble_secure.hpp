@@ -34,6 +34,7 @@
 #if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
 
 #include <openthread/ble_secure.h>
+#include <openthread/platform/ble.h>
 
 #include "meshcop/meshcop.hpp"
 #include "meshcop/secure_transport.hpp"

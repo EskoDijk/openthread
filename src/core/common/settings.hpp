@@ -803,7 +803,7 @@ public:
      */
     void DeleteOperationalDataset(MeshCoP::Dataset::Type aType);
 
-#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#if OPENTHREAD_CONFIG_TCAT_ENABLE
     /**
      * Stores the Tcat Commissioner certificate.
      *
@@ -828,7 +828,7 @@ public:
     {
         return Get<SettingsDriver>().Get(kKeyTcatCommrCert, aCert, &aCertLen);
     }
-#endif // OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#endif // OPENTHREAD_CONFIG_TCAT_ENABLE
 
     /**
      * Reads a specified settings entry.

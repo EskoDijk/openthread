@@ -37,10 +37,10 @@
 #include "openthread-core-config.h"
 
 #ifdef OPENTHREAD_CONFIG_TLS_API_ENABLE
-#error `OPENTHREAD_CONFIG_TLS_API_ENABLE` must not be defined directly, it is determined from `COAP_SECURE_API_ENABLE` and `BLE_TCAT_ENABLE`
+#error `OPENTHREAD_CONFIG_TLS_API_ENABLE` must not be defined directly, it is determined from `COAP_SECURE_API_ENABLE` and `TCAT_ENABLE`
 #endif
 
-#if OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE || OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#if OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE || OPENTHREAD_CONFIG_TCAT_ENABLE
 #define OPENTHREAD_CONFIG_TLS_API_ENABLE 1
 #else
 #define OPENTHREAD_CONFIG_TLS_API_ENABLE 0
@@ -65,9 +65,9 @@
 #define OPENTHREAD_CONFIG_MBEDTLS_PROVIDES_SSL_KEY_EXPORT 0
 #endif
 
-#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#if OPENTHREAD_CONFIG_TCAT_ENABLE
 #ifndef MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
-#error OPENTHREAD_CONFIG_BLE_TCAT_ENABLE requires MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
+#error OPENTHREAD_CONFIG_TCAT_ENABLE requires MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
 #endif
 #endif
 
@@ -909,6 +909,12 @@ public:
             : SecureTransport(aInstance, aLayerTwoSecurity, /* aDatagramTransport */ true)
         {
         }
+
+#if OPENTHREAD_CONFIG_TLS_API_ENABLE
+        // Promotes the protected SetExtension to public so callers that hold a
+        // Dtls::Transport directly (e.g. TcatUdpServer) can associate an Extension.
+        using SecureTransport::SetExtension;
+#endif
     };
 
     /**

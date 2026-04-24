@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2023, The OpenThread Authors.
+ *  Copyright (c) 2024, The OpenThread Authors.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -26,65 +26,58 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef OT_CLI_CLI_TCAT_HPP_
-#define OT_CLI_CLI_TCAT_HPP_
+/**
+ * @file
+ *   Implements transport-agnostic TCAT public API functions.
+ */
 
 #include "openthread-core-config.h"
 
+#if OPENTHREAD_CONFIG_TCAT_ENABLE
+
 #include <openthread/tcat.h>
 
-#include "cli/cli_utils.hpp"
+#include "common/as_core_type.hpp"
+#include "instance/instance.hpp"
+#include "meshcop/tcat_agent.hpp"
 
-#if OPENTHREAD_CONFIG_TCAT_ENABLE && OPENTHREAD_CONFIG_CLI_TCAT_ENABLE
+#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#include "radio/ble_secure.hpp"
+#endif
+#if OPENTHREAD_CONFIG_TCAT_UDP_ENABLE
+#include "meshcop/tcat_udp_server.hpp"
+#endif
 
-namespace ot {
+using namespace ot;
 
-namespace Cli {
-
-/**
- * Implements the Tcat CLI interpreter.
- */
-class Tcat : private Utils
+otError otTcatSetVendorInfo(otInstance *aInstance, const otTcatVendorInfo *aVendorInfo)
 {
-public:
-    /**
-     * Constructor
-     *
-     * @param[in]  aInstance            The OpenThread Instance.
-     * @param[in]  aOutputImplementer   An `OutputImplementer`.
-     */
-    Tcat(otInstance *aInstance, OutputImplementer &aOutputImplementer)
-        : Utils(aInstance, aOutputImplementer)
-        , mSelectedCert(0)
+    return AsCoreType(aInstance).Get<MeshCoP::TcatAgent>().SetTcatVendorInfo(AsCoreType(aVendorInfo));
+}
+
+otError otTcatSetAgentState(otInstance *aInstance, bool aActive, uint32_t aDelayMs, uint32_t aDurationMs)
+{
+    if (aActive)
     {
+        return AsCoreType(aInstance).Get<MeshCoP::TcatAgent>().Activate(aDelayMs, aDurationMs);
     }
+    else
+    {
+        return AsCoreType(aInstance).Get<MeshCoP::TcatAgent>().Standby();
+    }
+}
 
-    /**
-     * Processes a CLI sub-command.
-     *
-     * @param[in]  aArgs     An array of command line arguments.
-     *
-     * @retval OT_ERROR_NONE              Successfully executed the CLI command.
-     * @retval OT_ERROR_PENDING           The CLI command was successfully started but final result is pending.
-     * @retval OT_ERROR_INVALID_COMMAND   Invalid or unknown CLI command.
-     * @retval OT_ERROR_INVALID_ARGS      Invalid arguments.
-     * @retval ...                        Error during execution of the CLI command.
-     */
-    otError Process(Arg aArgs[]);
+otError otTcatSendApplicationTlv(otInstance               *aInstance,
+                                 otTcatApplicationProtocol aApplicationProtocol,
+                                 uint8_t                  *aBuf,
+                                 uint16_t                  aLength)
+{
+#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+    return AsCoreType(aInstance).Get<Ble::BleSecure>().SendApplicationTlv(MapEnum(aApplicationProtocol), aBuf, aLength);
+#elif OPENTHREAD_CONFIG_TCAT_UDP_ENABLE
+    return AsCoreType(aInstance).Get<MeshCoP::TcatUdpServer>().SendApplicationTlv(
+        MapEnum(aApplicationProtocol), aBuf, aLength);
+#endif
+}
 
-private:
-    using Command = CommandEntry<Tcat>;
-
-    template <CommandId kCommandId> otError Process(Arg aArgs[]);
-
-    otTcatVendorInfo mVendorInfo;
-    uint8_t          mSelectedCert;
-};
-
-} // namespace Cli
-
-} // namespace ot
-
-#endif // OPENTHREAD_CONFIG_TCAT_ENABLE && OPENTHREAD_CONFIG_CLI_TCAT_ENABLE
-
-#endif // OT_CLI_CLI_TCAT_HPP_
+#endif // OPENTHREAD_CONFIG_TCAT_ENABLE

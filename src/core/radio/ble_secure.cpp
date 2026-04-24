@@ -105,7 +105,13 @@ Error BleSecure::TcatStart(const MeshCoP::TcatAgent::JoinCallback aHandler)
 
     VerifyOrExit(mBleState != kStopped && mTlvMode, error = kErrorInvalidState);
 
-    error = Get<MeshCoP::TcatAgent>().Start(mReceiveCallback.GetHandler(), aHandler, mReceiveCallback.GetContext());
+    SuccessOrExit(error =
+                      Get<MeshCoP::TcatAgent>().Start(mReceiveCallback.GetHandler(), aHandler, mReceiveCallback.GetContext()));
+    Get<MeshCoP::TcatAgent>().SetStateChangeCallback(
+        [](bool aActive, void *aContext) {
+            static_cast<BleSecure *>(aContext)->NotifySendAdvertisements(aActive);
+        },
+        this);
 
 exit:
     return error;

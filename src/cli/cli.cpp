@@ -135,7 +135,7 @@ Interpreter::Interpreter(Instance *aInstance, otCliOutputCallback aCallback, voi
 #if OPENTHREAD_CONFIG_MLE_LINK_METRICS_INITIATOR_ENABLE
     , mLinkMetrics(aInstance, *this)
 #endif
-#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE && OPENTHREAD_CONFIG_CLI_BLE_SECURE_ENABLE
+#if OPENTHREAD_CONFIG_TCAT_ENABLE && OPENTHREAD_CONFIG_CLI_TCAT_ENABLE
     , mTcat(aInstance, *this)
 #endif
 #if OPENTHREAD_CONFIG_PING_SENDER_ENABLE
@@ -6995,7 +6995,7 @@ template <> otError Interpreter::Process<Cmd("debug")>(Arg aArgs[])
     return OT_ERROR_NONE;
 }
 
-#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE && OPENTHREAD_CONFIG_CLI_BLE_SECURE_ENABLE
+#if OPENTHREAD_CONFIG_TCAT_ENABLE && OPENTHREAD_CONFIG_CLI_TCAT_ENABLE
 template <> otError Interpreter::Process<Cmd("tcat")>(Arg aArgs[]) { return mTcat.Process(aArgs); }
 #endif
 
@@ -8710,7 +8710,7 @@ otError Interpreter::ProcessCommand(Arg aArgs[])
 #endif
         CmdEntry("state"),
         CmdEntry("targetpower"),
-#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE && OPENTHREAD_CONFIG_CLI_BLE_SECURE_ENABLE
+#if OPENTHREAD_CONFIG_TCAT_ENABLE && OPENTHREAD_CONFIG_CLI_TCAT_ENABLE
         CmdEntry("tcat"),
 #endif
 #if OPENTHREAD_CONFIG_TCP_ENABLE && OPENTHREAD_CONFIG_CLI_TCP_ENABLE

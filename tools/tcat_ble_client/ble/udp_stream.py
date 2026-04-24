@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 class UdpStream:
-    BASE_PORT = 10000
+    BASE_PORT = 1233
     MAX_SERVER_TIMEOUT_SEC = 0.010
 
     def __init__(self, address, node_id):
