@@ -912,7 +912,7 @@ public:
 
 #if OPENTHREAD_CONFIG_TLS_API_ENABLE
         // Promotes the protected SetExtension to public so callers that hold a
-        // Dtls::Transport directly (e.g. TcatUdpServer) can associate an Extension.
+        // Dtls::Transport directly (e.g. TcatCoapServer) can associate an Extension.
         using SecureTransport::SetExtension;
 #endif
     };

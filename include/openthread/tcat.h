@@ -310,64 +310,34 @@ void otTcatSetCaCertificateChain(otInstance    *aInstance,
 void otTcatSetSslAuthMode(otInstance *aInstance, bool aVerifyPeerCertificate);
 
 /**
- * Starts the TCAT agent on all compiled-in transports.
+ * Starts the TCAT agent to enable TCAT protocol over all supported transports.
  *
- * Vendor info and certificates must be set beforehand via `otTcatSetVendorInfo`,
- * `otTcatSetCertificate`, etc.
+ * Vendor info and certificates must be set beforehand via #otTcatSetVendorInfo,
+ * #otTcatSetCertificate, etc.
  *
  * @param[in] aInstance        A pointer to an OpenThread instance.
- * @param[in] aUdpPort         UDP port for the DTLS transport (0 = ephemeral). Ignored for BLE.
- * @param[in] aVendorInfo      Pointer to vendor info (must remain valid while running).
+ * @param[in] aUdpPort         UDP port for the DTLS transport (0 = ephemeral). Ignored for BLE transport.
  * @param[in] aAppDataHandler  Callback invoked when application-layer TCAT data arrives.
- * @param[in] aJoinHandler     Callback invoked when a network join/leave completes.
+ * @param[in] aJoinHandler     Callback that is called when a network join or leave
+ *                             operation is requested under guidance of the TCAT Commissioner.
  *
- * @retval OT_ERROR_NONE          Successfully started.
- * @retval OT_ERROR_ALREADY       Already started.
- * @retval OT_ERROR_INVALID_ARGS  Invalid vendor info.
+ * @retval OT_ERROR_NONE           Successfully started TCAT agent.
+ * @retval OT_ERROR_ALREADY        TCAT agent is already started.
+ * @retval OT_ERROR_INVALID_STATE  Prerequisite API functions to set vendor info and certificates were not called yet.
  */
 otError otTcatStart(otInstance                        *aInstance,
                     uint16_t                           aUdpPort,
-                    const otTcatVendorInfo            *aVendorInfo,
                     otHandleTcatApplicationDataReceive aAppDataHandler,
                     otHandleTcatJoin                   aJoinHandler);
 
 /**
- * Stops the TCAT agent and all active transports.
+ * Stops the TCAT agent and all active TCAT transports.
+ *
+ * It can be started again using #otTcatStart.
  *
  * @param[in] aInstance  A pointer to an OpenThread instance.
  */
 void otTcatStop(otInstance *aInstance);
-
-/**
- * @}
- */
-
-/**
- * @defgroup api-tcat-udp TCAT over UDP/DTLS
- *
- * @brief   Transport-specific send function for TCAT over UDP/DTLS. Requires
- *          `OPENTHREAD_CONFIG_TCAT_UDP_ENABLE`. All other TCAT configuration and
- *          lifecycle management is done through the generic `api-tcat-generic` API.
- *
- * @{
- */
-
-/**
- * Sends a TCAT application TLV over the active DTLS session.
- *
- * @param[in] aInstance             A pointer to an OpenThread instance.
- * @param[in] aApplicationProtocol  Application protocol selector.
- * @param[in] aBuf                  Payload buffer.
- * @param[in] aLength               Payload length in bytes.
- *
- * @retval OT_ERROR_NONE           Successfully enqueued.
- * @retval OT_ERROR_NO_BUFS        Buffer allocation failure.
- * @retval OT_ERROR_INVALID_STATE  Not connected.
- */
-otError otTcatUdpSendApplicationTlv(otInstance               *aInstance,
-                                    otTcatApplicationProtocol aApplicationProtocol,
-                                    uint8_t                  *aBuf,
-                                    uint16_t                  aLength);
 
 /**
  * @}

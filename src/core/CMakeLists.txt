@@ -35,8 +35,7 @@ set(COMMON_SOURCES
     api/backbone_router_ftd_api.cpp
     api/ble_secure_api.cpp
     api/tcat_api.cpp
-    api/tcat_udp_api.cpp
-    api/border_agent_admitter_api.cpp
+        api/border_agent_admitter_api.cpp
     api/border_agent_api.cpp
     api/border_agent_ephemeral_key_api.cpp
     api/border_agent_tracker_api.cpp
@@ -189,7 +188,7 @@ set(COMMON_SOURCES
     meshcop/seeker.cpp
     meshcop/steering_data.cpp
     meshcop/tcat_agent.cpp
-    meshcop/tcat_udp_server.cpp
+    meshcop/tcat_coaps_server.cpp
     meshcop/timestamp.cpp
     net/checksum.cpp
     net/dhcp6_client.cpp

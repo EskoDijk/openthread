@@ -44,9 +44,8 @@
 #if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
 #include <openthread/ble_secure.h>
 #include "radio/ble_secure.hpp"
-#endif
-#if OPENTHREAD_CONFIG_TCAT_UDP_ENABLE
-#include "meshcop/tcat_udp_server.hpp"
+#elif OPENTHREAD_CONFIG_TCAT_COAPS_ENABLE
+#include "meshcop/tcat_coaps_server.hpp"
 #endif
 
 using namespace ot;
@@ -75,8 +74,8 @@ otError otTcatSendApplicationTlv(otInstance               *aInstance,
 {
 #if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
     return AsCoreType(aInstance).Get<Ble::BleSecure>().SendApplicationTlv(MapEnum(aApplicationProtocol), aBuf, aLength);
-#elif OPENTHREAD_CONFIG_TCAT_UDP_ENABLE
-    return AsCoreType(aInstance).Get<MeshCoP::TcatUdpServer>().SendApplicationTlv(
+#elif OPENTHREAD_CONFIG_TCAT_COAPS_ENABLE
+    return AsCoreType(aInstance).Get<MeshCoP::TcatCoapServer>().SendApplicationTlv(
         MapEnum(aApplicationProtocol), aBuf, aLength);
 #endif
 }
@@ -88,10 +87,9 @@ void otTcatSetCertificate(otInstance    *aInstance,
                           uint32_t       aPrivateKeyLength)
 {
 #if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
-    otBleSecureSetCertificate(aInstance, aX509Cert, aX509Length, aPrivateKey, aPrivateKeyLength);
-#endif
-#if OPENTHREAD_CONFIG_TCAT_UDP_ENABLE
-    AsCoreType(aInstance).Get<MeshCoP::TcatUdpServer>().SetCertificate(aX509Cert, aX509Length,
+    AsCoreType(aInstance).Get<Ble::BleSecure>().SetCertificate(aX509Cert, aX509Length, aPrivateKey, aPrivateKeyLength);
+#elif OPENTHREAD_CONFIG_TCAT_COAPS_ENABLE
+    AsCoreType(aInstance).Get<MeshCoP::TcatCoapServer>().SetCertificate(aX509Cert, aX509Length,
                                                                         aPrivateKey, aPrivateKeyLength);
 #endif
 }
@@ -101,10 +99,9 @@ void otTcatSetCaCertificateChain(otInstance    *aInstance,
                                  uint32_t       aX509CaCertChainLength)
 {
 #if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
-    otBleSecureSetCaCertificateChain(aInstance, aX509CaCertificateChain, aX509CaCertChainLength);
-#endif
-#if OPENTHREAD_CONFIG_TCAT_UDP_ENABLE
-    AsCoreType(aInstance).Get<MeshCoP::TcatUdpServer>().SetCaCertificateChain(aX509CaCertificateChain,
+    AsCoreType(aInstance).Get<Ble::BleSecure>().SetCaCertificateChain(aX509CaCertificateChain, aX509CaCertChainLength);
+#elif OPENTHREAD_CONFIG_TCAT_COAPS_ENABLE
+    AsCoreType(aInstance).Get<MeshCoP::TcatCoapServer>().SetCaCertificateChain(aX509CaCertificateChain,
                                                                            aX509CaCertChainLength);
 #endif
 }
@@ -112,23 +109,18 @@ void otTcatSetCaCertificateChain(otInstance    *aInstance,
 void otTcatSetSslAuthMode(otInstance *aInstance, bool aVerifyPeerCertificate)
 {
 #if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
-    otBleSecureSetSslAuthMode(aInstance, aVerifyPeerCertificate);
-#endif
-#if OPENTHREAD_CONFIG_TCAT_UDP_ENABLE
-    AsCoreType(aInstance).Get<MeshCoP::TcatUdpServer>().SetSslAuthMode(aVerifyPeerCertificate);
+    AsCoreType(aInstance).Get<Ble::BleSecure>().SetSslAuthMode(aVerifyPeerCertificate);
+#elif OPENTHREAD_CONFIG_TCAT_COAPS_ENABLE
+    AsCoreType(aInstance).Get<MeshCoP::TcatCoapServer>().SetSslAuthMode(aVerifyPeerCertificate);
 #endif
 }
 
 otError otTcatStart(otInstance                        *aInstance,
                     uint16_t                           aUdpPort,
-                    const otTcatVendorInfo            *aVendorInfo,
                     otHandleTcatApplicationDataReceive aAppDataHandler,
                     otHandleTcatJoin                   aJoinHandler)
 {
     Error error;
-
-    SuccessOrExit(error =
-                      AsCoreType(aInstance).Get<MeshCoP::TcatAgent>().SetTcatVendorInfo(AsCoreType(aVendorInfo)));
 
 #if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
     OT_UNUSED_VARIABLE(aUdpPort); // only used by the UDP transport path
@@ -138,8 +130,8 @@ otError otTcatStart(otInstance                        *aInstance,
                       true,                                                           // TLV mode
                       nullptr));                                                      // context
     SuccessOrExit(error = AsCoreType(aInstance).Get<Ble::BleSecure>().TcatStart(aJoinHandler));
-#elif OPENTHREAD_CONFIG_TCAT_UDP_ENABLE
-    SuccessOrExit(error = AsCoreType(aInstance).Get<MeshCoP::TcatUdpServer>().Start(
+#elif OPENTHREAD_CONFIG_TCAT_COAPS_ENABLE
+    SuccessOrExit(error = AsCoreType(aInstance).Get<MeshCoP::TcatCoapServer>().Start(
                       aUdpPort,
                       aAppDataHandler,
                       aJoinHandler));
@@ -153,8 +145,8 @@ void otTcatStop(otInstance *aInstance)
 {
 #if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
     AsCoreType(aInstance).Get<Ble::BleSecure>().Stop();
-#elif OPENTHREAD_CONFIG_TCAT_UDP_ENABLE
-    AsCoreType(aInstance).Get<MeshCoP::TcatUdpServer>().Stop();
+#elif OPENTHREAD_CONFIG_TCAT_COAPS_ENABLE
+    AsCoreType(aInstance).Get<MeshCoP::TcatCoapServer>().Stop();
 #endif
 }
 

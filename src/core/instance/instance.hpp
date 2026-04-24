@@ -121,7 +121,7 @@
 #include "net/srp_advertising_proxy.hpp"
 #include "net/srp_client.hpp"
 #include "net/srp_server.hpp"
-#include "meshcop/tcat_udp_server.hpp"
+#include "meshcop/tcat_coaps_server.hpp"
 #include "radio/ble_secure.hpp"
 #include "thread/address_resolver.hpp"
 #include "thread/announce_begin_server.hpp"
@@ -817,8 +817,8 @@ private:
     MeshCoP::TcatAgent mTcatAgent;
 #endif
 
-#if OPENTHREAD_CONFIG_TCAT_UDP_ENABLE
-    MeshCoP::TcatUdpServer mTcatUdpServer;
+#if OPENTHREAD_CONFIG_TCAT_COAPS_ENABLE
+    MeshCoP::TcatCoapServer mTcatCoapServer;
 #endif
 
 #if OPENTHREAD_CONFIG_PING_SENDER_ENABLE
@@ -1318,8 +1318,8 @@ template <> inline Ble::BleSecure &Instance::Get(void) { return mBleSecure; }
 template <> inline MeshCoP::TcatAgent &Instance::Get(void) { return mTcatAgent; }
 #endif
 
-#if OPENTHREAD_CONFIG_TCAT_UDP_ENABLE
-template <> inline MeshCoP::TcatUdpServer &Instance::Get(void) { return mTcatUdpServer; }
+#if OPENTHREAD_CONFIG_TCAT_COAPS_ENABLE
+template <> inline MeshCoP::TcatCoapServer &Instance::Get(void) { return mTcatCoapServer; }
 #endif
 
 #endif // OPENTHREAD_MTD || OPENTHREAD_FTD

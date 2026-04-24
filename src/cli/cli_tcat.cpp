@@ -375,7 +375,8 @@ template <> otError Tcat::Process<Cmd("start")>(Arg aArgs[])
                                 reinterpret_cast<const uint8_t *>(OT_CLI_TCAT_TRUSTED_ROOT_CERTIFICATE),
                                 sizeof(OT_CLI_TCAT_TRUSTED_ROOT_CERTIFICATE));
     otTcatSetSslAuthMode(GetInstancePtr(), true);
-    SuccessOrExit(error = otTcatStart(GetInstancePtr(), 0, &mVendorInfo, HandleTcatReceive, nullptr));
+    SuccessOrExit(error = otTcatSetVendorInfo(GetInstancePtr(), &mVendorInfo));
+    SuccessOrExit(error = otTcatStart(GetInstancePtr(), 0, HandleTcatReceive, nullptr));
 
 exit:
     return error;
