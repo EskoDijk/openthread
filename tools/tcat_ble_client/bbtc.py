@@ -57,13 +57,17 @@ async def main():
     parser.add_argument('--debug', help='Enable debug logs', action='store_true')
     parser.add_argument('--info', help='Enable info logs', action='store_true')
     parser.add_argument('--cert_path', help='Path to certificate chain and key', action='store', default='auth')
+    parser.add_argument('--interface', type=str, default='', metavar='IFACE',
+                        help='Network interface for link-local IPv6 targets (e.g. wpan0)')
+    parser.add_argument('--port', type=int, default=None, metavar='PORT',
+                        help='UDP port override when connecting to a real device address (default 5684)')
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--mac', type=str, help='Device MAC address', action='store')
     group.add_argument('--name', type=str, help='Device name', action='store')
     group.add_argument('--scan', help='Scan all available devices', action='store_true')
     group.add_argument('--simulation', help='Connect to simulation node id', action='store')
-    group.add_argument('--dtls', help='Connect via DTLS over UDP to simulation node id', action='store')
-    group.add_argument('--coaps', help='Connect via CoAP over DTLS (CoAPS) to simulation node id', action='store')
+    group.add_argument('--dtls', help='Connect via DTLS/UDP: node id (simulation) or IPv6/IPv4 address', action='store')
+    group.add_argument('--coaps', help='Connect via CoAPS: node id (simulation) or IPv6/IPv4 address', action='store')
     args = parser.parse_args()
 
     if args.debug:
@@ -138,6 +142,14 @@ def validate_unsolicited_tlv(tlv: TLV):
         logger.error(f"Error: Illegal unsolicited TLV type sent by TCAT Device: {hex(tlv.type)}")
 
 
+def _resolve_host_port(value: str, base_port: int, port_override: int | None) -> tuple[str, int]:
+    """Return (host, port) from a node-id integer (simulation) or a host address string (real device)."""
+    try:
+        return '127.0.0.1', base_port + int(value)
+    except ValueError:
+        return value, port_override if port_override is not None else 5684
+
+
 async def get_device_by_args(args) -> BLEDevice | UdpStream | DtlsStream | CoapsStream | None:
     device = None
     if args.mac:
@@ -150,9 +162,11 @@ async def get_device_by_args(args) -> BLEDevice | UdpStream | DtlsStream | Coaps
     elif args.simulation:
         device = UdpStream("127.0.0.1", int(args.simulation))
     elif args.dtls:
-        device = DtlsStream("127.0.0.1", int(args.dtls))
+        host, port = _resolve_host_port(args.dtls, DtlsStream.DTLS_BASE_PORT, args.port)
+        device = DtlsStream(host, port, args.interface)
     elif args.coaps:
-        device = CoapsStream("127.0.0.1", int(args.coaps))
+        host, port = _resolve_host_port(args.coaps, CoapsStream.COAPS_BASE_PORT, args.port)
+        device = CoapsStream(host, port, args.interface)
 
     return device
 

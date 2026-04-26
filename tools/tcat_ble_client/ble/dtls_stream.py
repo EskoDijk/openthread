@@ -61,8 +61,10 @@ class DtlsStream:
     DTLS_BASE_PORT = 11000
     _POLL_TIMEOUT_SEC = 0.010  # non-blocking recv poll interval
 
-    def __init__(self, address: str, node_id: int):
-        self.address = (address, self.DTLS_BASE_PORT + node_id)
+    def __init__(self, host: str, port: int, interface: str = ''):
+        self.address = (host, port)
+        self._interface = interface
+        self._family = socket.AF_INET6 if ':' in host else socket.AF_INET
         self._dtls_sock = None
         self._peer_public_key = None
         self._peer_challenge = None
@@ -108,9 +110,13 @@ class DtlsStream:
             )
             ctx = tls.ClientContext(conf)
 
-            udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            udp_sock = socket.socket(self._family, socket.SOCK_DGRAM)
             udp_sock.settimeout(timeout)
-            udp_sock.connect(self.address)
+            if self._family == socket.AF_INET6 and self._interface:
+                scope_id = socket.if_nametoindex(self._interface)
+                udp_sock.connect((self.address[0], self.address[1], 0, scope_id))
+            else:
+                udp_sock.connect(self.address)
 
             dtls_sock = ctx.wrap_socket(udp_sock, server_hostname=None)
 
