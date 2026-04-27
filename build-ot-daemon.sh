@@ -1,0 +1,6 @@
+#!/bin/bash
+./script/cmake-build posix \
+  -DOT_DAEMON=ON \
+  -DOT_TCAT_COAPS=ON -DOT_BLE_TCAT=OFF \
+  -DOT_TREL=OFF -DOT_JOINER=ON -DOT_SERVICE=ON -DOT_COAP=ON -DOT_COAPS=ON -DOT_FULL_LOGS=ON \
+  $@

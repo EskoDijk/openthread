@@ -45,6 +45,7 @@ TcatCoapServer::TcatCoapServer(Instance &aInstance)
     , Coap::SecureSession(aInstance, static_cast<Dtls::Transport &>(*this))
     , mTcatResource(kTcatDataUri, HandleTcatPost, this)
     , mResponseMessage(nullptr)
+    , mPort(0)
 {
     Dtls::Transport::SetExtension(static_cast<Dtls::Transport::Extension &>(*this));
     Dtls::Transport::SetAcceptCallback(HandleAccept, this);
@@ -61,13 +62,16 @@ Error TcatCoapServer::Start(uint16_t                          aPort,
 
     SuccessOrExit(error = Dtls::Transport::Open(aPort));
     AddResource(mTcatResource);
+    SuccessOrExit(error = Get<Ip6::Filter>().AddUnsecurePort(aPort));
 
     SuccessOrExit(error = Get<TcatAgent>().Start(aAppDataCallback, aJoinHandler, nullptr));
     Get<TcatAgent>().SetStateChangeCallback(nullptr, nullptr);
+    mPort = aPort;
 
 exit:
     if (error != kErrorNone && error != kErrorAlready)
     {
+        IgnoreError(Get<Ip6::Filter>().RemoveUnsecurePort(aPort));
         Dtls::Transport::Close();
     }
 
@@ -80,6 +84,7 @@ void TcatCoapServer::Stop(void)
 
     Disconnect();
     RemoveResource(mTcatResource);
+    IgnoreError(Get<Ip6::Filter>().RemoveUnsecurePort(mPort));
     Dtls::Transport::Close();
     Get<TcatAgent>().Stop();
 
@@ -222,10 +227,13 @@ exit:
         {
             response->WriteCode(Coap::kCodeInternalError);
         }
-        IgnoreError(Coap::SecureSession::SendMessage(*response));
+        if (Coap::SecureSession::SendMessage(*response) == kErrorNone)
+        {
+            response = nullptr; // OT send queue owns the message now; do not free
+        }
     }
     mResponseMessage = nullptr;
-    FreeMessage(response);
+    FreeMessage(response); // no-op if sent successfully; frees only if SendMessage failed
 
     if (error != kErrorNone)
     {

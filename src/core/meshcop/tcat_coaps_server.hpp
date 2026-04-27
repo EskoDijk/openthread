@@ -103,6 +103,7 @@ private:
 
     Coap::Resource  mTcatResource;    // CoAP resource for handling TCAT Commissioner's requests
     Coap::Message  *mResponseMessage; // set during HandleTcatPost; nullptr otherwise
+    uint16_t        mPort;            // UDP port registered as unsecured in Ip6::Filter
 };
 
 } // namespace MeshCoP

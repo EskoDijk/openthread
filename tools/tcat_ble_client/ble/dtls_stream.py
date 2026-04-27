@@ -34,6 +34,7 @@ from typing import Optional, Callable
 from cryptography.x509 import load_der_x509_certificate
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from mbedtls import tls, x509, pk
+from mbedtls._tls import WantReadError as MbedTLSWantReadError
 
 from tlv.tlv import TLV
 from tlv.tcat_tlv import TcatTLVType
@@ -158,7 +159,7 @@ class DtlsStream:
             self._dtls_sock.settimeout(self._POLL_TIMEOUT_SEC)
             try:
                 return self._dtls_sock.recv(bufsize)
-            except (socket.timeout, TimeoutError, OSError):
+            except (socket.timeout, TimeoutError, OSError, MbedTLSWantReadError):
                 return b''
 
         if timeout <= 0.0:
