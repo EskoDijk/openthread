@@ -60,6 +60,7 @@
 #include "posix/platform/radio_url.hpp"
 #include "posix/platform/spinel_driver_getter.hpp"
 #include "posix/platform/spinel_manager.hpp"
+#include "posix/platform/tcp.hpp"
 #include "posix/platform/udp.hpp"
 
 otInstance *gInstance = nullptr;
@@ -169,6 +170,10 @@ void platformInitRcpMode(otPlatformConfig *aPlatformConfig)
     ot::Posix::Udp::Get().Init(aPlatformConfig->mInterfaceName);
 #endif
 #endif
+
+#if OPENTHREAD_CONFIG_PLATFORM_TCP_ENABLE
+    ot::Posix::Tcp::Get().Init(otSysGetThreadNetifName());
+#endif
 exit:
     return;
 }
@@ -248,6 +253,10 @@ void platformSetUp(otPlatformConfig *aPlatformConfig)
     ot::Posix::Udp::Get().SetUp();
 #endif
 
+#if OPENTHREAD_CONFIG_PLATFORM_TCP_ENABLE
+    ot::Posix::Tcp::Get().SetUp();
+#endif
+
 #if OPENTHREAD_CONFIG_MULTICAST_DNS_ENABLE
     ot::Posix::MdnsSocket::Get().SetUp();
 #endif
@@ -310,6 +319,10 @@ void platformTearDown(void)
     ot::Posix::Udp::Get().TearDown();
 #endif
 
+#if OPENTHREAD_CONFIG_PLATFORM_TCP_ENABLE
+    ot::Posix::Tcp::Get().TearDown();
+#endif
+
 #if OPENTHREAD_CONFIG_PLATFORM_NETIF_ENABLE
     platformNetifTearDown();
 #endif
@@ -340,6 +353,9 @@ void platformDeinitRcpMode(void)
 
 #if OPENTHREAD_CONFIG_PLATFORM_UDP_ENABLE
     ot::Posix::Udp::Get().Deinit();
+#endif
+#if OPENTHREAD_CONFIG_PLATFORM_TCP_ENABLE
+    ot::Posix::Tcp::Get().Deinit();
 #endif
 #if OPENTHREAD_CONFIG_PLATFORM_NETIF_ENABLE
     platformNetifDeinit();
