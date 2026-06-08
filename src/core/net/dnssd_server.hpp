@@ -44,6 +44,18 @@
 
 #endif // OPENTHREAD_CONFIG_DNSSD_DISCOVERY_PROXY_ENABLE
 
+#if OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE && !OPENTHREAD_CONFIG_PLATFORM_TCP_ENABLE
+#error "OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE requires OPENTHREAD_CONFIG_PLATFORM_TCP_ENABLE"
+#endif
+
+#if OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE && OPENTHREAD_CONFIG_TCP_ENABLE
+// In-core TCP and platform TCP cannot both serve the node: when in-core TCP (`OPENTHREAD_CONFIG_TCP_ENABLE`) is
+// enabled, `Ip6::PassToHost()` does not pass TCP segments to the host/platform stack and the in-core stack answers
+// (RST'ing unmatched ports), so a platform-TCP listener never receives anything. Build with in-core TCP disabled
+// (`OT_TCP=OFF`) to serve DNS over TCP via the platform. Note this also precludes DNS-client-over-TCP on the node.
+#error "OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE is incompatible with OPENTHREAD_CONFIG_TCP_ENABLE; build with OT_TCP=OFF"
+#endif
+
 #include <openthread/dnssd_server.h>
 #include <openthread/platform/dns.h>
 
@@ -61,6 +73,10 @@
 #include "net/ip6.hpp"
 #include "net/netif.hpp"
 #include "net/srp_server.hpp"
+
+#if OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
+#include "net/dns_tcp_transport.hpp"
+#endif
 
 /**
  * @file
@@ -92,6 +108,28 @@ class Server : public InstanceLocator, private NonCopyable
 #endif
 
 public:
+#if OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
+    /**
+     * Represents a TCP connection handle, used as a reply destination for queries received over TCP.
+     */
+    typedef TcpTransport::Connection TcpConnection;
+#endif
+
+    /**
+     * Describes the source of a query, and therefore where its response is sent.
+     */
+    struct QuerySource
+    {
+        const Ip6::MessageInfo *mMessageInfo; ///< Peer message info (used to reply over UDP; peer info for logging).
+#if OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
+        TcpConnection *mTcpConnection; ///< TCP connection to reply over, or `nullptr` when the query came over UDP.
+
+        bool IsTcp(void) const { return mTcpConnection != nullptr; }
+#else
+        bool IsTcp(void) const { return false; }
+#endif
+    };
+
     /**
      * Contains the counters of the DNS-SD server.
      */
@@ -151,7 +189,7 @@ public:
          *
          * @param[in] aMessageInfo  The IP message info of the query.
          */
-        void Init(const Ip6::MessageInfo &aMessageInfo);
+        void Init(const QuerySource &aSource);
 
         /**
          * Returns the message info of the query.
@@ -160,10 +198,33 @@ public:
          */
         const Ip6::MessageInfo &GetMessageInfo(void) const { return mMessageInfo; }
 
+#if OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
+        TcpConnection *GetTcpConnection(void) const { return mTcpConnection; }
+#endif
+
+        /**
+         * Returns the source (reply destination) of the query.
+         *
+         * @returns  The query source.
+         */
+        QuerySource GetSource(void) const
+        {
+            QuerySource source;
+
+            source.mMessageInfo = &mMessageInfo;
+#if OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
+            source.mTcpConnection = mTcpConnection;
+#endif
+            return source;
+        }
+
     private:
         Ip6::MessageInfo mMessageInfo;
-        TimeMilli        mExpireTime;
-        bool             mValid;
+#if OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
+        TcpConnection *mTcpConnection;
+#endif
+        TimeMilli mExpireTime;
+        bool      mValid;
     };
 #endif
 
@@ -381,10 +442,24 @@ private:
     {
         ResponseCode ParseQuestions(uint8_t aTestMode, bool &aShouldRespond);
 
+        QuerySource GetSource(void) const
+        {
+            QuerySource source;
+
+            source.mMessageInfo = mMessageInfo;
+#if OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
+            source.mTcpConnection = mTcpConnection;
+#endif
+            return source;
+        }
+
         const Message          *mMessage;
         const Ip6::MessageInfo *mMessageInfo;
-        Header                  mHeader;
-        Questions               mQuestions;
+#if OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
+        TcpConnection *mTcpConnection = nullptr;
+#endif
+        Header    mHeader;
+        Questions mQuestions;
     };
 
     struct ProxyQueryInfo;
@@ -447,9 +522,9 @@ private:
         Error AppendAaaaRecord(const Ip6::Address &aAddress, uint32_t aTtl);
         Error AppendARecord(const Ip6::Address &aAddress, uint32_t aTtl);
         void  IncResourceRecordCount(void);
-        void  Send(const Ip6::MessageInfo &aMessageInfo);
-        void  Answer(const HostInfo &aHostInfo, const Ip6::MessageInfo &aMessageInfo);
-        void  Answer(const ServiceInstanceInfo &aInstanceInfo, const Ip6::MessageInfo &aMessageInfo);
+        void  Send(const QuerySource &aSource);
+        void  Answer(const HostInfo &aHostInfo, const QuerySource &aSource);
+        void  Answer(const ServiceInstanceInfo &aInstanceInfo, const QuerySource &aSource);
         Error ExtractServiceInstanceLabel(const char *aInstanceName, Name::LabelBuffer &aLabel);
 #if OPENTHREAD_CONFIG_SRP_SERVER_ENABLE
         Error ResolveBySrp(void);
@@ -491,10 +566,24 @@ private:
 
     struct ProxyQueryInfo : Message::FooterData<ProxyQueryInfo>
     {
+        QuerySource GetSource(void) const
+        {
+            QuerySource source;
+
+            source.mMessageInfo = &mMessageInfo;
+#if OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
+            source.mTcpConnection = mTcpConnection;
+#endif
+            return source;
+        }
+
         Questions        mQuestions;
         Ip6::MessageInfo mMessageInfo;
-        TimeMilli        mExpireTime;
-        NameOffsets      mOffsets;
+#if OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
+        TcpConnection *mTcpConnection;
+#endif
+        TimeMilli   mExpireTime;
+        NameOffsets mOffsets;
 #if OPENTHREAD_CONFIG_DNSSD_DISCOVERY_PROXY_ENABLE
         ProxyAction mAction;
 #endif
@@ -582,9 +671,16 @@ private:
     bool IsRunning(void) const { return mSocket.IsBound(); }
     void HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
     void ProcessQuery(Request &aRequest);
-    void ResolveByProxy(Response &aResponse, const Ip6::MessageInfo &aMessageInfo);
-    void RemoveQueryAndPrepareResponse(ProxyQuery &aQuery, ProxyQueryInfo &aInfo, Response &aResponse);
-    void Finalize(ProxyQuery &aQuery, ResponseCode aResponseCode);
+    void  ResolveByProxy(Response &aResponse, const QuerySource &aSource);
+    void  RemoveQueryAndPrepareResponse(ProxyQuery &aQuery, ProxyQueryInfo &aInfo, Response &aResponse);
+    void  Finalize(ProxyQuery &aQuery, ResponseCode aResponseCode);
+    Error SendResponse(OwnedPtr<Message> aMessage, const QuerySource &aSource);
+#if OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
+    static void HandleTcpQuery(void *aContext, TcpConnection &aConnection, Message &aMessage);
+    static void HandleTcpDisconnect(void *aContext, TcpConnection &aConnection);
+    void        ProcessTcpQuery(TcpConnection &aConnection, Message &aMessage);
+    void        DropTransactionsForTcpConnection(const TcpConnection &aConnection);
+#endif
 
     static void  ReadQueryName(const Message &aQuery, Name::Buffer &aName);
     static bool  QueryNameMatches(const Message &aQuery, const char *aName);
@@ -616,7 +712,7 @@ private:
 
 #if OPENTHREAD_CONFIG_DNS_UPSTREAM_QUERY_ENABLE
     bool                      ShouldForwardToUpstream(const Request &aRequest) const;
-    UpstreamQueryTransaction *AllocateUpstreamQueryTransaction(const Ip6::MessageInfo &aMessageInfo);
+    UpstreamQueryTransaction *AllocateUpstreamQueryTransaction(const QuerySource &aSource);
     void                      ResetUpstreamQueryTransaction(UpstreamQueryTransaction &aTxn, Error aError);
     Error                     ResolveByUpstream(const Request &aRequest);
 #endif
@@ -644,6 +740,9 @@ private:
 #endif
 
     ServerSocket mSocket;
+#if OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
+    TcpTransport mTcpTransport;
+#endif
 
     ProxyQueryList                mProxyQueries;
     Callback<SubscribeCallback>   mQuerySubscribe;

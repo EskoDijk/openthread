@@ -110,6 +110,40 @@
 #endif
 
 /**
+ * @def OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
+ *
+ * Define to 1 to enable serving DNS-SD server queries over TCP (in addition to UDP), using the platform TCP
+ * abstraction (`OPENTHREAD_CONFIG_PLATFORM_TCP_ENABLE`).
+ *
+ * The only functional platform-TCP backend is the POSIX one, so this is intended for POSIX/Border Router builds. On
+ * platforms without a working platform-TCP backend (e.g., the simulation stub) the TCP listener simply fails to start
+ * and the server remains UDP-only.
+ */
+#ifndef OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
+#define OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE 0
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_DNSSD_SERVER_TCP_QUERY_MAX_SIZE
+ *
+ * Maximum size (in bytes) of a single DNS message exchanged over TCP by the DNS-SD server. A received framed message
+ * larger than this causes the connection to be aborted.
+ */
+#ifndef OPENTHREAD_CONFIG_DNSSD_SERVER_TCP_QUERY_MAX_SIZE
+#define OPENTHREAD_CONFIG_DNSSD_SERVER_TCP_QUERY_MAX_SIZE 1024
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_DNS_TCP_TRANSPORT_MAX_CONNECTIONS
+ *
+ * Maximum number of concurrent TCP connections per `Dns::TcpTransport` instance (the reusable DNS-over-TCP transport
+ * used by the DNS-SD server, and potentially other DNS-message servers in the future).
+ */
+#ifndef OPENTHREAD_CONFIG_DNS_TCP_TRANSPORT_MAX_CONNECTIONS
+#define OPENTHREAD_CONFIG_DNS_TCP_TRANSPORT_MAX_CONNECTIONS 4
+#endif
+
+/**
  * @}
  */
 

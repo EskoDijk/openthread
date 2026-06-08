@@ -58,6 +58,13 @@ const char Server::kSoaRnameLabel[] = "postmaster";
 Server::Server(Instance &aInstance)
     : InstanceLocator(aInstance)
     , mSocket(aInstance, *this)
+#if OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
+    , mTcpTransport(aInstance,
+                    &Server::HandleTcpQuery,
+                    &Server::HandleTcpDisconnect,
+                    this,
+                    OPENTHREAD_CONFIG_DNSSD_SERVER_TCP_QUERY_MAX_SIZE)
+#endif
 #if OPENTHREAD_CONFIG_DNSSD_DISCOVERY_PROXY_ENABLE
     , mDiscoveryProxy(aInstance)
 #endif
@@ -82,6 +89,15 @@ Error Server::Start(void)
 
     SuccessOrExit(error = mSocket.Open(kBindUnspecifiedNetif ? Ip6::kNetifUnspecified : Ip6::kNetifThreadInternal));
     SuccessOrExit(error = mSocket.Bind(kPort));
+
+#if OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
+    // Starting the TCP listener is best-effort. On platforms without a functional platform-TCP backend (e.g., the
+    // simulation stub) this fails and the server continues to serve over UDP only.
+    if (mTcpTransport.Start(kPort) != kErrorNone)
+    {
+        LogWarn("Failed to start DNS-over-TCP listener");
+    }
+#endif
 
 #if OPENTHREAD_CONFIG_SRP_SERVER_ENABLE
     Get<Srp::Server>().HandleDnssdServerStateChange();
@@ -108,6 +124,12 @@ exit:
 
 void Server::Stop(void)
 {
+#if OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
+    // Abort TCP connections first so that any responses sent below (e.g., from `Finalize()`) for TCP-originated
+    // queries are dropped rather than written to connections that are being torn down.
+    mTcpTransport.Stop();
+#endif
+
     for (ProxyQuery &query : mProxyQueries)
     {
         Finalize(query, Header::kResponseServerFailure);
@@ -227,7 +249,7 @@ void Server::ProcessQuery(Request &aRequest)
     // setting it to `nullptr`. In such a case, the `response.Send()`
     // call will effectively do nothing.
 
-    ResolveByProxy(response, *aRequest.mMessageInfo);
+    ResolveByProxy(response, aRequest.GetSource());
 
 exit:
     if (rcode != Header::kResponseSuccess)
@@ -237,7 +259,7 @@ exit:
 
     if (shouldRespond)
     {
-        response.Send(*aRequest.mMessageInfo);
+        response.Send(aRequest.GetSource());
     }
 }
 
@@ -278,7 +300,7 @@ exit:
     return error;
 }
 
-void Server::Response::Send(const Ip6::MessageInfo &aMessageInfo)
+void Server::Response::Send(const QuerySource &aSource)
 {
     ResponseCode rcode = mHeader.GetResponseCode();
 
@@ -294,12 +316,9 @@ void Server::Response::Send(const Ip6::MessageInfo &aMessageInfo)
 
     mMessage->Write(0, mHeader);
 
-    SuccessOrExit(Get<Server>().mSocket.SendTo(*mMessage, aMessageInfo));
+    // `SendResponse()` always takes over ownership of the message.
 
-    // When `SendTo()` returns success it takes over ownership of
-    // the given message, so we release ownership of `mMessage`.
-
-    mMessage.Release();
+    SuccessOrExit(Get<Server>().SendResponse(mMessage.PassOwnership(), aSource));
 
     LogInfo("Send response, rcode:%u", rcode);
 
@@ -308,6 +327,100 @@ void Server::Response::Send(const Ip6::MessageInfo &aMessageInfo)
 exit:
     return;
 }
+
+Error Server::SendResponse(OwnedPtr<Message> aMessage, const QuerySource &aSource)
+{
+    Error error;
+
+#if OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
+    if (aSource.IsTcp())
+    {
+        // `SendMessage()` always takes over ownership of the message.
+        error = mTcpTransport.SendMessage(*aSource.mTcpConnection, aMessage.PassOwnership());
+        ExitNow();
+    }
+#endif
+
+    error = mSocket.SendTo(*aMessage, *aSource.mMessageInfo);
+
+    if (error == kErrorNone)
+    {
+        // On success `SendTo()` takes over ownership of the message.
+        aMessage.Release();
+    }
+
+#if OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
+exit:
+#endif
+    return error;
+}
+
+#if OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
+
+void Server::HandleTcpQuery(void *aContext, TcpConnection &aConnection, Message &aMessage)
+{
+    static_cast<Server *>(aContext)->ProcessTcpQuery(aConnection, aMessage);
+}
+
+void Server::ProcessTcpQuery(TcpConnection &aConnection, Message &aMessage)
+{
+    Request          request;
+    Ip6::MessageInfo messageInfo;
+
+    messageInfo.Clear();
+
+    request.mMessage       = &aMessage;
+    request.mMessageInfo   = &messageInfo;
+    request.mTcpConnection = &aConnection;
+
+    SuccessOrExit(aMessage.Read(aMessage.GetOffset(), request.mHeader));
+    VerifyOrExit(request.mHeader.GetType() == Header::kTypeQuery);
+
+    LogInfo("Received query over TCP");
+
+    ProcessQuery(request);
+
+exit:
+    return;
+}
+
+void Server::HandleTcpDisconnect(void *aContext, TcpConnection &aConnection)
+{
+    static_cast<Server *>(aContext)->DropTransactionsForTcpConnection(aConnection);
+}
+
+void Server::DropTransactionsForTcpConnection(const TcpConnection &aConnection)
+{
+    // The TCP connection is closing. Drop any pending asynchronous work bound to it so a later completion does not
+    // reply over a closed (or subsequently reused) connection.
+
+#if OPENTHREAD_CONFIG_DNS_UPSTREAM_QUERY_ENABLE
+    for (UpstreamQueryTransaction &txn : mUpstreamQueryTransactions)
+    {
+        if (txn.IsValid() && (txn.GetTcpConnection() == &aConnection))
+        {
+            ResetUpstreamQueryTransaction(txn, kErrorAbort);
+        }
+    }
+#endif
+
+    for (ProxyQuery &query : mProxyQueries)
+    {
+        ProxyQueryInfo info;
+
+        info.ReadFrom(query);
+
+        if (info.mTcpConnection == &aConnection)
+        {
+            Response response(GetInstance());
+
+            // Removing into a local `Response` that is then discarded frees the query without sending a reply.
+            RemoveQueryAndPrepareResponse(query, info, response);
+        }
+    }
+}
+
+#endif // OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
 
 bool Server::Questions::IsFor(uint16_t aRrType) const
 {
@@ -1142,7 +1255,8 @@ void Server::OnUpstreamQueryDone(UpstreamQueryTransaction &aQueryTransaction, Me
 
     if (aResponseMessage != nullptr)
     {
-        error = mSocket.SendTo(*aResponseMessage, aQueryTransaction.GetMessageInfo());
+        error            = SendResponse(OwnedPtr<Message>(aResponseMessage), aQueryTransaction.GetSource());
+        aResponseMessage = nullptr; // Ownership was taken over by `SendResponse()`.
     }
     else
     {
@@ -1155,7 +1269,7 @@ exit:
     FreeMessageOnError(aResponseMessage, error);
 }
 
-Server::UpstreamQueryTransaction *Server::AllocateUpstreamQueryTransaction(const Ip6::MessageInfo &aMessageInfo)
+Server::UpstreamQueryTransaction *Server::AllocateUpstreamQueryTransaction(const QuerySource &aSource)
 {
     UpstreamQueryTransaction *newTxn = nullptr;
 
@@ -1170,7 +1284,7 @@ Server::UpstreamQueryTransaction *Server::AllocateUpstreamQueryTransaction(const
 
     VerifyOrExit(newTxn != nullptr, mCounters.mUpstreamDnsCounters.mFailures++);
 
-    newTxn->Init(aMessageInfo);
+    newTxn->Init(aSource);
     LogInfo("Upstream query transaction %d initialized.", static_cast<int>(newTxn - mUpstreamQueryTransactions));
     mTimer.FireAtIfEarlier(newTxn->GetExpireTime());
 
@@ -1183,7 +1297,7 @@ Error Server::ResolveByUpstream(const Request &aRequest)
     Error                     error = kErrorNone;
     UpstreamQueryTransaction *txn;
 
-    txn = AllocateUpstreamQueryTransaction(*aRequest.mMessageInfo);
+    txn = AllocateUpstreamQueryTransaction(aRequest.GetSource());
     VerifyOrExit(txn != nullptr, error = kErrorNoBufs);
 
     VerifyOrExit(otPlatDnsIsUpstreamQueryAvailable(&GetInstance()), error = kErrorInvalidState);
@@ -1197,7 +1311,7 @@ exit:
 }
 #endif // OPENTHREAD_CONFIG_DNS_UPSTREAM_QUERY_ENABLE
 
-void Server::ResolveByProxy(Response &aResponse, const Ip6::MessageInfo &aMessageInfo)
+void Server::ResolveByProxy(Response &aResponse, const QuerySource &aSource)
 {
     ProxyQuery    *query;
     ProxyQueryInfo info;
@@ -1212,9 +1326,12 @@ void Server::ResolveByProxy(Response &aResponse, const Ip6::MessageInfo &aMessag
     // appending `ProxyQueryInfo` to it.
 
     info.mQuestions   = aResponse.mQuestions;
-    info.mMessageInfo = aMessageInfo;
-    info.mExpireTime  = TimerMilli::GetNow() + kQueryTimeout;
-    info.mOffsets     = aResponse.mOffsets;
+    info.mMessageInfo = *aSource.mMessageInfo;
+#if OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
+    info.mTcpConnection = aSource.mTcpConnection;
+#endif
+    info.mExpireTime = TimerMilli::GetNow() + kQueryTimeout;
+    info.mOffsets    = aResponse.mOffsets;
 
 #if OPENTHREAD_CONFIG_DNSSD_DISCOVERY_PROXY_ENABLE
     info.mAction = kNoAction;
@@ -1414,7 +1531,7 @@ void Server::Response::InitFrom(ProxyQuery &aQuery, const ProxyQueryInfo &aInfo)
     mOffsets   = aInfo.mOffsets;
 }
 
-void Server::Response::Answer(const ServiceInstanceInfo &aInstanceInfo, const Ip6::MessageInfo &aMessageInfo)
+void Server::Response::Answer(const ServiceInstanceInfo &aInstanceInfo, const QuerySource &aSource)
 {
     Error error = kErrorNone;
 
@@ -1435,10 +1552,10 @@ exit:
         SetResponseCode(Header::kResponseServerFailure);
     }
 
-    Send(aMessageInfo);
+    Send(aSource);
 }
 
-void Server::Response::Answer(const HostInfo &aHostInfo, const Ip6::MessageInfo &aMessageInfo)
+void Server::Response::Answer(const HostInfo &aHostInfo, const QuerySource &aSource)
 {
     // Caller already ensures that question is either for AAAA or A record.
 
@@ -1451,7 +1568,7 @@ void Server::Response::Answer(const HostInfo &aHostInfo, const Ip6::MessageInfo 
         SetResponseCode(Header::kResponseServerFailure);
     }
 
-    Send(aMessageInfo);
+    Send(aSource);
 }
 
 void Server::SetQueryCallbacks(SubscribeCallback aSubscribe, UnsubscribeCallback aUnsubscribe, void *aContext)
@@ -1492,7 +1609,7 @@ void Server::HandleDiscoveredServiceInstance(const char *aServiceFullName, const
             Response response(GetInstance());
 
             RemoveQueryAndPrepareResponse(query, info, response);
-            response.Answer(aInstanceInfo, info.mMessageInfo);
+            response.Answer(aInstanceInfo, info.GetSource());
         }
     }
 }
@@ -1517,7 +1634,7 @@ void Server::HandleDiscoveredHost(const char *aHostFullName, const HostInfo &aHo
             Response response(GetInstance());
 
             RemoveQueryAndPrepareResponse(query, info, response);
-            response.Answer(aHostInfo, info.mMessageInfo);
+            response.Answer(aHostInfo, info.GetSource());
         }
     }
 }
@@ -1603,7 +1720,7 @@ void Server::Finalize(ProxyQuery &aQuery, ResponseCode aResponseCode)
     RemoveQueryAndPrepareResponse(aQuery, info, response);
 
     response.SetResponseCode(aResponseCode);
-    response.Send(info.mMessageInfo);
+    response.Send(info.GetSource());
 }
 
 void Server::UpdateResponseCounters(ResponseCode aResponseCode)
@@ -1632,11 +1749,14 @@ void Server::UpdateResponseCounters(ResponseCode aResponseCode)
 }
 
 #if OPENTHREAD_CONFIG_DNS_UPSTREAM_QUERY_ENABLE
-void Server::UpstreamQueryTransaction::Init(const Ip6::MessageInfo &aMessageInfo)
+void Server::UpstreamQueryTransaction::Init(const QuerySource &aSource)
 {
-    mMessageInfo = aMessageInfo;
-    mValid       = true;
-    mExpireTime  = TimerMilli::GetNow() + kQueryTimeout;
+    mMessageInfo = *aSource.mMessageInfo;
+#if OPENTHREAD_CONFIG_DNSSD_SERVER_OVER_TCP_ENABLE
+    mTcpConnection = aSource.mTcpConnection;
+#endif
+    mValid      = true;
+    mExpireTime = TimerMilli::GetNow() + kQueryTimeout;
 }
 
 void Server::ResetUpstreamQueryTransaction(UpstreamQueryTransaction &aTxn, Error aError)
@@ -2385,7 +2505,7 @@ void Server::DiscoveryProxy::HandleResult(ProxyAction         aAction,
 
         if (shouldFinalize)
         {
-            response.Send(info.mMessageInfo);
+            response.Send(info.GetSource());
             continue;
         }
 
@@ -2403,7 +2523,7 @@ void Server::DiscoveryProxy::HandleResult(ProxyAction         aAction,
         if (response.mMessage->Append(info) != kErrorNone)
         {
             response.SetResponseCode(Header::kResponseServerFailure);
-            response.Send(info.mMessageInfo);
+            response.Send(info.GetSource());
             continue;
         }
 

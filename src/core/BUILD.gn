@@ -605,6 +605,8 @@ openthread_core_files = [
   "net/dns_dso.cpp",
   "net/dns_dso.hpp",
   "net/dns_platform.cpp",
+  "net/dns_tcp_transport.cpp",
+  "net/dns_tcp_transport.hpp",
   "net/dns_types.cpp",
   "net/dns_types.hpp",
   "net/dnssd.cpp",
