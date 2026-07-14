@@ -1758,6 +1758,295 @@ void TestOmrSelection(void)
     FinalizeTest();
 }
 
+void TestNonPreferredOmrPrefixInNetData(void)
+{
+    Ip6::Prefix                     localOnLink;
+    Ip6::Prefix                     localOmr;
+    Ip6::Prefix                     omrPrefix  = PrefixFromString("2000:0000:1111:4444::", 64);
+    Ip6::Prefix                     omrPrefix2 = PrefixFromString("2000:0000:1111:5555::", 64);
+    NetworkData::OnMeshPrefixConfig prefixConfig;
+    uint16_t                        heapAllocations;
+
+    Log("--------------------------------------------------------------------------------------------");
+    Log("TestNonPreferredOmrPrefixInNetData");
+
+    InitTest();
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Start Routing Manager. Check emitted RS and RA messages.
+
+    sRsEmitted   = false;
+    sRaValidated = false;
+    sExpectedPio = kPioAdvertisingLocalOnLink;
+    sExpectedRios.Clear();
+
+    heapAllocations = sHeapAllocatedPtrs.GetLength();
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().SetEnabled(true));
+
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOnLinkPrefix(localOnLink));
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().GetOmrPrefix(localOmr));
+
+    Log("Local on-link prefix is %s", localOnLink.ToString().AsCString());
+    Log("Local OMR prefix is %s", localOmr.ToString().AsCString());
+
+    sExpectedRios.Add(localOmr);
+
+    AdvanceTime(30000);
+
+    VerifyOrQuit(sRsEmitted);
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sExpectedRios.SawAll());
+    VerifyOrQuit(sExpectedRios[0].mLifetime == kRioValidLifetime);
+
+    Log("Received RA was validated");
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Add a new preferred OMR prefix directly into net data. The new
+    // prefix should be favored over the local OMR prefix.
+
+    prefixConfig.Clear();
+    prefixConfig.mPrefix       = omrPrefix;
+    prefixConfig.mStable       = true;
+    prefixConfig.mSlaac        = true;
+    prefixConfig.mPreferred    = true;
+    prefixConfig.mOnMesh       = true;
+    prefixConfig.mDefaultRoute = false;
+    prefixConfig.mPreference   = NetworkData::kRoutePreferenceMedium;
+
+    SuccessOrQuit(otBorderRouterAddOnMeshPrefix(sInstance, &prefixConfig));
+    SuccessOrQuit(otBorderRouterRegister(sInstance));
+
+    AdvanceTime(100);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Make sure BR emits RA with the new OMR prefix with full route
+    // lifetime.
+
+    sRaValidated = false;
+    sExpectedRios.Clear();
+    sExpectedRios.Add(omrPrefix);
+
+    AdvanceTime(20000);
+
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sExpectedRios.SawAll());
+    VerifyOrQuit(sExpectedRios[0].mLifetime == kRioValidLifetime);
+    VerifyOrQuit(sExpectedRios[0].mPreference == NetworkData::kRoutePreferenceMedium);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Mark the prefix in net data as deprecated (clear its `mPreferred`
+    // flag) while keeping it in net data.
+
+    prefixConfig.mPreferred = false;
+
+    SuccessOrQuit(otBorderRouterAddOnMeshPrefix(sInstance, &prefixConfig));
+    SuccessOrQuit(otBorderRouterRegister(sInstance));
+
+    AdvanceTime(100);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Make sure BR emits RA, advertising the local non-preferred OMR prefix
+    // (with short route lifetime and low preference), while it is still present
+    // in Network Data.
+
+    sRaValidated = false;
+    sExpectedRios.Clear();
+    sExpectedRios.Add(omrPrefix);
+    sExpectedRios.Add(localOmr);
+
+    AdvanceTime(20000);
+
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sExpectedRios.SawAll());
+    VerifyOrQuit(sExpectedRios[0].mLifetime <= kRioDeprecatingLifetime);
+    VerifyOrQuit(sExpectedRios[0].mPreference == NetworkData::kRoutePreferenceLow);
+    VerifyOrQuit(sExpectedRios[1].mLifetime == kRioValidLifetime);
+    VerifyOrQuit(sExpectedRios[1].mPreference == NetworkData::kRoutePreferenceMedium);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Wait some time. It should be still advertised due to its presence in
+    // Network Data.
+
+    sRaValidated = false;
+    sExpectedRios.Clear();
+    sExpectedRios.Add(omrPrefix);
+    sExpectedRios.Add(localOmr);
+
+    AdvanceTime(310000);
+
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sExpectedRios.SawAll());
+    VerifyOrQuit(sExpectedRios[0].mLifetime <= kRioDeprecatingLifetime);
+    VerifyOrQuit(sExpectedRios[0].mPreference == NetworkData::kRoutePreferenceLow);
+    VerifyOrQuit(sExpectedRios[1].mLifetime == kRioValidLifetime);
+    VerifyOrQuit(sExpectedRios[1].mPreference == NetworkData::kRoutePreferenceMedium);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Wait for more than the RA beacon interval and make sure the
+    // deprecated prefix, which remains present in net data, is still
+    // included as RIO in emitted RAs.
+
+    sRaValidated = false;
+    sExpectedRios.Clear();
+    sExpectedRios.Add(omrPrefix);
+    sExpectedRios.Add(localOmr);
+
+    AdvanceTime(200000);
+
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sExpectedRios.SawAll());
+    VerifyOrQuit(sExpectedRios[0].mLifetime <= kRioDeprecatingLifetime);
+    VerifyOrQuit(sExpectedRios[0].mPreference == NetworkData::kRoutePreferenceLow);
+    VerifyOrQuit(sExpectedRios[1].mLifetime == kRioValidLifetime);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Mark the prefix in net data as preferred again. It should be
+    // advertised again with full route lifetime.
+
+    prefixConfig.mPreferred = true;
+
+    SuccessOrQuit(otBorderRouterAddOnMeshPrefix(sInstance, &prefixConfig));
+    SuccessOrQuit(otBorderRouterRegister(sInstance));
+
+    AdvanceTime(100);
+
+    sRaValidated = false;
+    sExpectedRios.Clear();
+    sExpectedRios.Add(omrPrefix);
+
+    AdvanceTime(20000);
+
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sExpectedRios.SawAll());
+    VerifyOrQuit(sExpectedRios[0].mLifetime == kRioValidLifetime);
+    VerifyOrQuit(sExpectedRios[0].mPreference == NetworkData::kRoutePreferenceMedium);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Add a second OMR prefix which is deprecated from the start (added
+    // with `mPreferred` flag cleared). It should be advertised with a
+    // short route lifetime and low preference.
+
+    prefixConfig.mPrefix    = omrPrefix2;
+    prefixConfig.mPreferred = false;
+
+    SuccessOrQuit(otBorderRouterAddOnMeshPrefix(sInstance, &prefixConfig));
+    SuccessOrQuit(otBorderRouterRegister(sInstance));
+
+    AdvanceTime(100);
+
+    sRaValidated = false;
+    sExpectedRios.Clear();
+    sExpectedRios.Add(omrPrefix2);
+
+    AdvanceTime(20000);
+
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sExpectedRios.SawAll());
+    VerifyOrQuit(sExpectedRios[0].mLifetime <= kRioDeprecatingLifetime);
+    VerifyOrQuit(sExpectedRios[0].mPreference == NetworkData::kRoutePreferenceLow);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Wait some time and check that it is still advertised.
+
+    sRaValidated = false;
+    sExpectedRios.Clear();
+    sExpectedRios.Add(omrPrefix2);
+
+    AdvanceTime(310000);
+
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sExpectedRios.SawAll());
+    VerifyOrQuit(sExpectedRios[0].mLifetime <= kRioDeprecatingLifetime);
+    VerifyOrQuit(sExpectedRios[0].mPreference == NetworkData::kRoutePreferenceLow);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Remove the second prefix from net data. It goes into a deprecating
+    // state, counting down route lifetime until 0. The countdown starts
+    // immediately, but is only observable in RAs as they are emitted: the
+    // removal-triggered RA advertises the full deprecation time (300), and
+    // any periodic RA beacon (tx every 180 sec plus jitter) after that
+    // advertises the remaining time.
+
+    SuccessOrQuit(otBorderRouterRemoveOnMeshPrefix(sInstance, &omrPrefix2));
+    SuccessOrQuit(otBorderRouterRegister(sInstance));
+
+    AdvanceTime(100);
+
+    sRaValidated = false;
+    sExpectedRios.Clear();
+    sExpectedRios.Add(omrPrefix2);
+    sExpectedRios.Add(omrPrefix);
+
+    AdvanceTime(20000);
+
+    // first RA: newly deprecated prefix advertised at kRioDeprecatingLifetime
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sExpectedRios.SawAll());
+    VerifyOrQuit(sExpectedRios[0].mLifetime <= kRioDeprecatingLifetime);
+    VerifyOrQuit(sExpectedRios[0].mPreference == NetworkData::kRoutePreferenceLow);
+    VerifyOrQuit(sExpectedRios[1].mLifetime == kRioValidLifetime);
+
+    sRaValidated = false;
+    sExpectedRios.Clear();
+    sExpectedRios.Add(omrPrefix2);
+    sExpectedRios.Add(omrPrefix);
+
+    AdvanceTime(200000);
+
+    // next RA: deprecating prefix advertised with a counting down route lifetime
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sExpectedRios.SawAll());
+    VerifyOrQuit(sExpectedRios[0].mLifetime > 0);
+    VerifyOrQuit(sExpectedRios[0].mLifetime < kRioDeprecatingLifetime - 150);
+    VerifyOrQuit(sExpectedRios[0].mPreference == NetworkData::kRoutePreferenceLow);
+    VerifyOrQuit(sExpectedRios[1].mLifetime == kRioValidLifetime);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Wait for the deprecation countdown to expire. At the expiration
+    // time (300 sec after removal) an RA is emitted advertising the
+    // prefix with zero route lifetime, after which it is removed from
+    // the advertised prefixes.
+
+    sRaValidated = false;
+    sExpectedRios.Clear();
+    sExpectedRios.Add(omrPrefix2);
+    sExpectedRios.Add(omrPrefix);
+
+    AdvanceTime(90000);
+
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(sExpectedRios.SawAll());
+    VerifyOrQuit(sExpectedRios[0].mLifetime == 0);
+    VerifyOrQuit(sExpectedRios[0].mPreference == NetworkData::kRoutePreferenceLow);
+    VerifyOrQuit(sExpectedRios[1].mLifetime == kRioValidLifetime);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Wait for more than the RA beacon interval and check that the
+    // removed prefix is no longer advertised.
+
+    sRaValidated = false;
+    sExpectedRios.Clear();
+    sExpectedRios.Add(omrPrefix2);
+    sExpectedRios.Add(omrPrefix);
+
+    AdvanceTime(200000);
+
+    VerifyOrQuit(sRaValidated);
+    VerifyOrQuit(!sExpectedRios[0].mSawInRa);
+    VerifyOrQuit(sExpectedRios[1].mSawInRa);
+    VerifyOrQuit(sExpectedRios[1].mLifetime == kRioValidLifetime);
+
+    //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().SetEnabled(false));
+    AdvanceTime(3000);
+
+    VerifyOrQuit(heapAllocations == sHeapAllocatedPtrs.GetLength());
+
+    Log("End of TestNonPreferredOmrPrefixInNetData");
+    FinalizeTest();
+}
+
 void TestOmrConfig(void)
 {
     using OmrConfig = BorderRouter::RoutingManager::OmrConfig;
@@ -5430,6 +5719,7 @@ int main(void)
 #if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
     ot::TestSamePrefixesFromMultipleRouters();
     ot::TestOmrSelection();
+    ot::TestNonPreferredOmrPrefixInNetData();
     ot::TestOmrConfig();
     ot::TestDefaultRoute();
     ot::TestNonUlaPioWithOnlyOnLinkFlag();

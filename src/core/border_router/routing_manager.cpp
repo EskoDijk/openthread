@@ -1899,17 +1899,17 @@ Error RoutingManager::RioAdvertiser::AppendRios(RouterAdvert::TxMessage &aRaMess
 
     if (omrPrefixManager.ShouldAdvertiseLocalAsRio())
     {
-        mPrefixes.Add(omrPrefixManager.GetLocalPrefix().GetPrefix());
+        mPrefixes.Add(omrPrefixManager.GetLocalPrefix().GetPrefix(), /* aPreferred */ true);
     }
 
     // (2) Favored OMR prefix.
 
     if (!omrPrefixManager.GetFavoredPrefix().IsEmpty())
     {
-        mPrefixes.Add(omrPrefixManager.GetFavoredPrefix().GetPrefix());
+        mPrefixes.Add(omrPrefixManager.GetFavoredPrefix().GetPrefix(), /* aPreferred */ true);
     }
 
-    // (3) All other OMR prefixes.
+    // (3) All other OMR prefixes (regardless of the mPreferred flag value).
 
     iterator = NetworkData::kIteratorInit;
 
@@ -1926,11 +1926,11 @@ Error RoutingManager::RioAdvertiser::AppendRios(RouterAdvert::TxMessage &aRaMess
         if (IsValidOmrPrefix(prefixConfig) &&
             (prefixConfig.GetPrefix() != omrPrefixManager.GetLocalPrefix().GetPrefix()))
         {
-            mPrefixes.Add(prefixConfig.GetPrefix());
+            mPrefixes.Add(prefixConfig.GetPrefix(), prefixConfig.mPreferred);
         }
     }
 
-    // (4) All other on-mesh prefixes.
+    // (4) All other on-mesh prefixes (regardless of mPreferred flag value).
 
     iterator = NetworkData::kIteratorInit;
 
@@ -1938,11 +1938,13 @@ Error RoutingManager::RioAdvertiser::AppendRios(RouterAdvert::TxMessage &aRaMess
     {
         if (prefixConfig.mOnMesh && !IsValidOmrPrefix(prefixConfig))
         {
-            mPrefixes.Add(prefixConfig.GetPrefix());
+            mPrefixes.Add(prefixConfig.GetPrefix(), prefixConfig.mPreferred);
         }
     }
 
-    // Determine deprecating prefixes
+    // Determine mIsDeprecating prefixes: previously advertised prefixes that have
+    // since been removed from Network Data. This state is independent of the mPreferred
+    // flag value that the prefix entry had in the Network Data.
 
     for (RioPrefix &prefix : oldPrefixes)
     {
@@ -1988,6 +1990,14 @@ Error RoutingManager::RioAdvertiser::AppendRios(RouterAdvert::TxMessage &aRaMess
             lifetime   = TimeMilli::MsecToSec(prefix.mExpirationTime - nextTime.GetNow());
             preference = NetworkData::kRoutePreferenceLow;
         }
+        else if (!prefix.mPreferredFlag)
+        {
+            // Deprecated (non-preferred) prefixes that are explicitly included in Network Data.
+            // We don't count down the route lifetime for these, because these can stay in the
+            // Network Data for an unknown amount of time.
+            lifetime   = kDefaultDeprecatedOmrPrefixLifetime;
+            preference = NetworkData::kRoutePreferenceLow;
+        }
 
         SuccessOrExit(error = AppendRio(prefix.mPrefix, lifetime, preference, aRaMessage));
     }
@@ -2017,18 +2027,27 @@ void RoutingManager::RioAdvertiser::HandleTimer(void)
     Get<RoutingManager>().ScheduleRoutingPolicyEvaluation(kImmediately);
 }
 
-void RoutingManager::RioAdvertiser::RioPrefixArray::Add(const Ip6::Prefix &aPrefix)
+void RoutingManager::RioAdvertiser::RioPrefixArray::Add(const Ip6::Prefix &aPrefix, bool aPreferred)
 {
     // Checks if `aPrefix` is already present in the array and if not
-    // adds it as a new entry.
+    // adds it as a new entry. The same prefix can be present multiple
+    // times in Network Data (published by different BRs) with
+    // different `mPreferred` flag values. The prefix is treated as
+    // preferred if any of its publishers indicates it as preferred.
 
-    Error     error;
-    RioPrefix newEntry;
+    Error      error;
+    RioPrefix  newEntry;
+    RioPrefix *existingEntry = FindMatching(aPrefix);
 
-    VerifyOrExit(!ContainsMatching(aPrefix));
+    if (existingEntry != nullptr)
+    {
+        existingEntry->mPreferredFlag = existingEntry->mPreferredFlag || aPreferred;
+        ExitNow();
+    }
 
     newEntry.Clear();
-    newEntry.mPrefix = aPrefix;
+    newEntry.mPrefix        = aPrefix;
+    newEntry.mPreferredFlag = aPreferred;
 
     error = PushBack(newEntry);
 

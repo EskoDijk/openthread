@@ -573,6 +573,7 @@ private:
 
     // Default valid lifetime. In seconds.
     static constexpr uint32_t kDefaultOmrPrefixLifetime    = 1800;
+    static constexpr uint32_t kDefaultDeprecatedOmrPrefixLifetime = 300;
     static constexpr uint32_t kDefaultOnLinkPrefixLifetime = 1800;
     static constexpr uint32_t kDefaultNat64PrefixLifetime  = 300;
 
@@ -780,7 +781,8 @@ private:
         // Manages the list of prefixes advertised as RIO in emitted
         // RA. The RIO prefixes are discovered from on-mesh prefixes in
         // network data including OMR prefix from `OmrPrefixManager`.
-        // It also handles deprecating removed prefixes.
+        // It also handles deprecating prefixes that are removed from
+        // network data.
 
     public:
         explicit RioAdvertiser(Instance &aInstance);
@@ -796,14 +798,15 @@ private:
         void            HandleTimer(void);
 
     private:
-        static constexpr uint32_t kDeprecationTime = TimeMilli::SecToMsec(300);
+        static constexpr uint32_t kDeprecationTime = TimeMilli::SecToMsec(kDefaultDeprecatedOmrPrefixLifetime);
 
         struct RioPrefix : public Clearable<RioPrefix>
         {
             bool Matches(const Ip6::Prefix &aPrefix) const { return (mPrefix == aPrefix); }
 
             Ip6::Prefix mPrefix;
-            bool        mIsDeprecating;
+            bool        mPreferredFlag; // last state of mPreferred flag for the prefix as seen in Network Data
+            bool        mIsDeprecating; // whether deprecation is ongoing based on prefix's removal from Network Data
             TimeMilli   mExpirationTime;
         };
 
@@ -814,7 +817,7 @@ private:
             public Array<RioPrefix, 2 * kMaxOnMeshPrefixes>
 #endif
         {
-            void Add(const Ip6::Prefix &aPrefix);
+            void Add(const Ip6::Prefix &aPrefix, bool aPreferred);
         };
 
         void  SetPreferenceBasedOnRole(void);
