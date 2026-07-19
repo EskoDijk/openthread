@@ -199,6 +199,8 @@ typedef enum otCoapOptionContentFormat
     OT_COAP_OPTION_CONTENT_FORMAT_SENML_EXI        = 114, ///< application/senml-exi: [RFC8428]
     OT_COAP_OPTION_CONTENT_FORMAT_SENSML_EXI       = 115, ///< application/sensml-exi: [RFC8428]
     OT_COAP_OPTION_CONTENT_FORMAT_COAP_GROUP_JSON  = 256, ///< application/coap-group+json: [RFC7390]
+    OT_COAP_OPTION_CONTENT_FORMAT_PKCS10           = 286, ///< application/pkcs10: [RFC5967]
+    OT_COAP_OPTION_CONTENT_FORMAT_PKIX_CERT        = 287, ///< application/pkix-cert: [RFC2585]
     OT_COAP_OPTION_CONTENT_FORMAT_SENML_XML        = 310, ///< application/senml+xml: [RFC8428]
     OT_COAP_OPTION_CONTENT_FORMAT_SENSML_XML       = 311  ///< application/sensml+xml: [RFC8428]
 } otCoapOptionContentFormat;

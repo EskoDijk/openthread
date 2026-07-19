@@ -752,6 +752,10 @@ private:
     MeshCoP::Joiner mJoiner;
 #endif
 
+#if OPENTHREAD_CONFIG_CCM_ENABLE
+    MeshCoP::Credentials mCredentialsCcm;
+#endif
+
 #if OPENTHREAD_CONFIG_JAM_DETECTION_ENABLE
     Utils::JamDetector mJamDetector;
 #endif
@@ -1104,6 +1108,10 @@ template <> inline MeshCoP::Seeker &Instance::Get(void) { return mSeeker; }
 
 #if OPENTHREAD_CONFIG_JOINER_ENABLE
 template <> inline MeshCoP::Joiner &Instance::Get(void) { return mJoiner; }
+#endif
+
+#if OPENTHREAD_CONFIG_CCM_ENABLE
+template <> inline MeshCoP::Credentials &Instance::Get(void) { return mCredentialsCcm; }
 #endif
 
 #if OPENTHREAD_CONFIG_DNS_CLIENT_ENABLE

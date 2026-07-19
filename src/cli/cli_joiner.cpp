@@ -169,6 +169,71 @@ exit:
     return error;
 }
 
+#if OPENTHREAD_CONFIG_CCM_ENABLE
+
+/**
+ * @cli joiner startae
+ * @code
+ * joiner startae
+ * Done
+ * @endcode
+ * @cparam joiner startae
+ * @par api_copy
+ * #otJoinerStartAe
+ */
+template <> otError Joiner::Process<Cmd("startae")>(Arg aArgs[])
+{
+    OT_UNUSED_VARIABLE(aArgs);
+    otError error;
+
+    error =
+        otJoinerStartCcm(GetInstancePtr(), otJoinOperation::OT_JOIN_OPERATION_AE_CBRSKI, &Joiner::HandleCallback, this);
+
+    return error;
+}
+
+/**
+ * @cli joiner startnkp
+ * @code
+ * joiner startnkp
+ * Done
+ * @endcode
+ * @cparam joiner startnkp
+ * @par api_copy
+ * #otJoinerStartNkp
+ */
+template <> otError Joiner::Process<Cmd("startnkp")>(Arg aArgs[])
+{
+    OT_UNUSED_VARIABLE(aArgs);
+    otError error;
+
+    error = otJoinerStartCcm(GetInstancePtr(), otJoinOperation::OT_JOIN_OPERATION_NKP, &Joiner::HandleCallback, this);
+
+    return error;
+}
+
+/**
+ * @cli joiner startccm
+ * @code
+ * joiner startccm
+ * Done
+ * @endcode
+ * @cparam joiner startccm
+ * @par api_copy
+ * #otJoinerStartCcm
+ */
+template <> otError Joiner::Process<Cmd("startccm")>(Arg aArgs[])
+{
+    OT_UNUSED_VARIABLE(aArgs);
+    otError error;
+
+    error = otJoinerStartCcm(GetInstancePtr(), otJoinOperation::OT_JOIN_OPERATION_CCM_ALL, &Joiner::HandleCallback, this);
+
+    return error;
+}
+
+#endif // OPENTHREAD_CONFIG_CCM_ENABLE
+
 /**
  * @cli joiner stop
  * @code
@@ -219,7 +284,16 @@ otError Joiner::Process(Arg aArgs[])
 #define CmdEntry(aCommandString) {aCommandString, &Joiner::Process<Cmd(aCommandString)>}
 
     static constexpr Command kCommands[] = {
-        CmdEntry("discerner"), CmdEntry("id"), CmdEntry("start"), CmdEntry("state"), CmdEntry("stop"),
+        CmdEntry("discerner"),
+        CmdEntry("id"),
+        CmdEntry("start"),
+#if OPENTHREAD_CONFIG_CCM_ENABLE
+        CmdEntry("startae"),
+        CmdEntry("startccm"),
+        CmdEntry("startnkp"),
+#endif
+        CmdEntry("state"),
+        CmdEntry("stop"),
     };
 
 #undef CmdEntry

@@ -202,6 +202,9 @@ Instance::Instance(void)
 #if OPENTHREAD_CONFIG_JOINER_ENABLE
     , mJoiner(*this)
 #endif
+#if OPENTHREAD_CONFIG_CCM_ENABLE
+    , mCredentialsCcm(*this)
+#endif
 #if OPENTHREAD_CONFIG_JAM_DETECTION_ENABLE
     , mJamDetector(*this)
 #endif

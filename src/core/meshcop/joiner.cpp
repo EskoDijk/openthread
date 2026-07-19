@@ -44,6 +44,10 @@ RegisterLogModule("Joiner");
 
 Joiner::Joiner(Instance &aInstance)
     : InstanceLocator(aInstance)
+#if OPENTHREAD_CONFIG_CCM_ENABLE
+    , mCbrskiClient(nullptr)
+#endif
+    , mJoinerOperation(kOperationMeshcop)
     , mState(kStateIdle)
     , mFinalizeMessage(nullptr)
     , mTimer(aInstance)
@@ -126,6 +130,9 @@ Error Joiner::Start(const char      *aPskd,
     VerifyOrExit(mState == kStateIdle, error = kErrorBusy);
     VerifyOrExit(!Get<Seeker>().IsRunning(), error = kErrorBusy);
 
+    mJoinerOperation = kOperationMeshcop;
+    SuccessOrExit(error = Get<Seeker>().SetUdpPort(kMeshcopJoinerUdpSourcePort));
+
     SuccessOrExit(
         error = Get<Tmf::SecureAgent>().Open(Get<Seeker>().GetUdpPort(), Ip6::NetifIdentifier::kNetifThreadInternal));
 
@@ -166,12 +173,16 @@ void Joiner::Stop(void)
 {
     LogInfo("Joiner stopped");
 
-    // Callback is set to `nullptr` to skip calling it from `Finish()`
-    mCompletionCallback.Clear();
-    Finish(kErrorAbort);
+#if OPENTHREAD_CONFIG_CCM_ENABLE
+    if (mCbrskiClient != nullptr)
+    {
+        mCbrskiClient->Finish(kErrorAbort, /* aInvokeCallback */ false);
+    }
+#endif
+    Finish(kErrorAbort, /* aInvokeCallback */ false);
 }
 
-void Joiner::Finish(Error aError)
+void Joiner::Finish(Error aError, bool aInvokeCallback)
 {
     switch (mState)
     {
@@ -197,10 +208,11 @@ void Joiner::Finish(Error aError)
     SetState(kStateIdle);
     FreeJoinerFinalizeMessage();
 
-    mCompletionCallback.InvokeIfSet(aError);
-
 exit:
-    return;
+    if (aInvokeCallback)
+    {
+        mCompletionCallback.InvokeIfSet(aError);
+    }
 }
 
 Seeker::Verdict Joiner::EvaluateScanResult(void *aContext, const otSeekerScanResult *aResult)
@@ -280,7 +292,7 @@ void Joiner::TryNextCandidate(Error aPrevError)
 
     } while (error != kErrorNotFound);
 
-    Finish(aPrevError);
+    Finish(aPrevError, /* aInvokeCallback */ true);
 
 exit:
     return;
@@ -311,8 +323,31 @@ void Joiner::HandleSecureCoapClientConnect(Dtls::Session::ConnectEvent aEvent)
     if (aEvent == Dtls::Session::kConnected)
     {
         SetState(kStateConnected);
-        SendJoinerFinalize();
+        switch (mJoinerOperation)
+        {
+#if OPENTHREAD_CONFIG_CCM_ENABLE
+        case kOperationCcmAeCbrski:
+            if (mCbrskiClient == nullptr)
+            {
+                mCbrskiClient = new CbrskiClient(GetInstance()); // FIXME what if new alloc fails?
+            }
+            mCbrskiClient->StartEnroll(Get<Tmf::SecureAgent>(), HandleCbrskiClientDone, this);
+            break;
+        case kOperationCcmNkp:
+            SendJoinerFinalize();
+            break;
+#endif
+        default: // includes kTypeMeshcop
+            SendJoinerFinalize();
+            break;
+        }
+#if OPENTHREAD_CONFIG_CCM_ENABLE
+        mTimer.Start((mJoinerOperation == kOperationCcmAeCbrski)
+                         ? kCcmCbrskiVoucherResponseTimeout
+                         : kResponseTimeout);
+#else
         mTimer.Start(kResponseTimeout);
+#endif
     }
     else
     {
@@ -399,7 +434,7 @@ void Joiner::HandleJoinerFinalizeResponse(Coap::Msg *aMsg, Error aResult)
     VerifyOrExit(mState == kStateConnected && aResult == kErrorNone);
     OT_ASSERT(aMsg != nullptr);
 
-    VerifyOrExit(aMsg->IsAck() && aMsg->GetCode() == Coap::kCodeChanged);
+    VerifyOrExit(aMsg->GetCode() == Coap::kCodeChanged);
 
     SuccessOrExit(Tlv::Find<StateTlv>(aMsg->mMessage, state));
 
@@ -498,7 +533,7 @@ void Joiner::HandleTimer(void)
         OT_ASSERT(false);
     }
 
-    Finish(error);
+    Finish(error, /* aInvokeCallback */ true);
 }
 
 // LCOV_EXCL_START
@@ -516,6 +551,36 @@ const char *Joiner::StateToString(State aState)
     DefineEnumStringArray(StateMapList);
 
     return kStrings[aState];
+}
+
+const char *Joiner::OperationToString(Joiner::Operation aOperation)
+{
+    const char *str = "UnknownOp";
+
+    switch (aOperation)
+    {
+#if OPENTHREAD_CONFIG_CCM_ENABLE
+    case kOperationCcmAeCbrski:
+        str = "AE/cBRSKI";
+        break;
+    case kOperationCcmNkp:
+        str = "NKP";
+        break;
+    case kOperationCcmEstCoaps:
+        str = "EST-CoAPS/JR";
+        break;
+    case kOperationCcmAll:
+        str = "CCM(All)";
+        break;
+#endif
+    case kOperationMeshcop:
+        str = "MeshCoP";
+        break;
+    default:
+        break;
+    }
+
+    return str;
 }
 
 // LCOV_EXCL_STOP

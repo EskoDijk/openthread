@@ -47,6 +47,20 @@
 #include "config/srp_server.h"
 
 /**
+ * @def OPENTHREAD_CONFIG_CCM_ENABLE
+ *
+ * Define to 1 to enable Thread Commercial Commissioning Mode (CCM), including cBRSKI Autonomous Enrollment (AE)
+ * and Network Key Provisioning (NKP) join operations.
+ */
+#ifndef OPENTHREAD_CONFIG_CCM_ENABLE
+#define OPENTHREAD_CONFIG_CCM_ENABLE 0
+#endif
+
+#if OPENTHREAD_CONFIG_CCM_ENABLE && !OPENTHREAD_CONFIG_JOINER_ENABLE
+#error "OPENTHREAD_CONFIG_CCM_ENABLE requires OPENTHREAD_CONFIG_JOINER_ENABLE"
+#endif
+
+/**
  * @def OPENTHREAD_CONFIG_STACK_VENDOR_OUI
  *
  * The Organizationally Unique Identifier for the Thread stack.

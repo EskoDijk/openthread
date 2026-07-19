@@ -37,10 +37,10 @@
 #include "openthread-core-config.h"
 
 #ifdef OPENTHREAD_CONFIG_TLS_API_ENABLE
-#error `OPENTHREAD_CONFIG_TLS_API_ENABLE` must not be defined directly, it is determined from `COAP_SECURE_API_ENABLE` and `BLE_TCAT_ENABLE`
+#error `OPENTHREAD_CONFIG_TLS_API_ENABLE` must not be defined directly, it is determined from `COAP_SECURE_API_ENABLE`, `BLE_TCAT_ENABLE` and `CCM_ENABLE`
 #endif
 
-#if OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE || OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#if OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE || OPENTHREAD_CONFIG_BLE_TCAT_ENABLE || OPENTHREAD_CONFIG_CCM_ENABLE
 #define OPENTHREAD_CONFIG_TLS_API_ENABLE 1
 #else
 #define OPENTHREAD_CONFIG_TLS_API_ENABLE 0
@@ -548,6 +548,30 @@ public:
                                                    size_t  *aAttributeLength);
 
         /**
+         * Returns an attribute value for the OID 1.3.6.1.4.1.44970.x from the v3 extensions of
+         * the given x509 certificate @p aCert, where the last digit x is set to @p aThreadOidDescriptor.
+         * The attribute length is set if the attribute was successfully read or zero if unsuccessful.
+         *
+         * @param[in]      aCert                 The X509v3 certificate to get the attribute from.
+         * @param[in]      aThreadOidDescriptor  The last digit of the Thread attribute OID.
+         * @param[out]     aAttributeBuffer      A pointer to the attribute buffer.
+         * @param[in,out]  aAttributeLength      On input, the max size of @p aAttributeBuffer.
+         *                                       On output, the length of the attribute written to the buffer.
+         *
+         * @retval kErrorNone             Successfully read attribute.
+         * @retval kErrorInvalidArgs      Invalid attribute length.
+         * @retval kErrorNotFound         The requested attribute was not found.
+         * @retval kErrorNoBufs           Insufficient memory for storing the attribute value.
+         * @retval kErrorInvalidState     Certificate @p aCert is not correct, or null.
+         * @retval kErrorNotImplemented   The value of aThreadOidDescriptor is >127.
+         * @retval kErrorParse            The certificate extensions could not be parsed.
+         */
+        Error GetThreadAttributeFromCertificate(const mbedtls_x509_crt *aCert,
+                                                int                     aThreadOidDescriptor,
+                                                uint8_t                *aAttributeBuffer,
+                                                size_t                 *aAttributeLength);
+
+        /**
          * Set the authentication mode for a connection.
          *
          * Disable or enable the verification of peer certificate.
@@ -600,11 +624,7 @@ public:
         };
 #endif
 
-        int   SetApplicationSecureKeys(mbedtls_ssl_config &aConfig);
-        Error GetThreadAttributeFromCertificate(const mbedtls_x509_crt *aCert,
-                                                int                     aThreadOidDescriptor,
-                                                uint8_t                *aAttributeBuffer,
-                                                size_t                 *aAttributeLength);
+        int SetApplicationSecureKeys(mbedtls_ssl_config &aConfig);
 
         SecureTransport &mSecureTransport;
 #if defined(MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED)

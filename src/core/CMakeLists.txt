@@ -172,6 +172,11 @@ set(COMMON_SOURCES
     meshcop/border_agent_ephemeral_key.cpp
     meshcop/border_agent_tracker.cpp
     meshcop/border_agent_txt_data.cpp
+    meshcop/ccm/cbor.cpp
+    meshcop/ccm/cbrski_client.cpp
+    meshcop/ccm/cose.cpp
+    meshcop/ccm/credentials.cpp
+    meshcop/ccm/joiner_ccm.cpp
     meshcop/commissioner.cpp
     meshcop/dataset.cpp
     meshcop/dataset_manager.cpp

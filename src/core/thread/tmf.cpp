@@ -342,9 +342,15 @@ Message::Priority Agent::DscpToPriority(uint8_t aDscp)
 
 SecureAgent::SecureAgent(Instance &aInstance)
     : Coap::Dtls::Transport(aInstance, kNoLinkSecurity)
+#if OPENTHREAD_CONFIG_CCM_ENABLE
+    , Coap::Dtls::Transport::Extension(static_cast<Coap::Dtls::Transport &>(*this))
+#endif
     , Coap::SecureSession(aInstance, static_cast<Coap::Dtls::Transport &>(*this))
 {
     SetAcceptCallback(&HandleDtlsAccept, this);
+#if OPENTHREAD_CONFIG_CCM_ENABLE
+    Coap::Dtls::Transport::SetExtension(static_cast<Coap::Dtls::Transport::Extension &>(*this));
+#endif
 
 #if (OPENTHREAD_FTD && OPENTHREAD_CONFIG_COMMISSIONER_ENABLE) || OPENTHREAD_PLATFORM_NEXUS
     SetResourceHandler(&HandleResource);

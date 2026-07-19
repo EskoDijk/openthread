@@ -272,7 +272,11 @@ private:
 /**
  * Implements functionality of the secure TMF agent.
  */
-class SecureAgent : public Coap::Dtls::Transport, public Coap::SecureSession
+class SecureAgent : public Coap::Dtls::Transport,
+#if OPENTHREAD_CONFIG_CCM_ENABLE
+                    public Coap::Dtls::Transport::Extension,
+#endif
+                    public Coap::SecureSession
 {
 public:
     /**
