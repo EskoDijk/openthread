@@ -1,5 +1,5 @@
 #
-#  Copyright (c) 2019, The OpenThread Authors.
+#  Copyright (c) 2024, The OpenThread Authors.
 #  All rights reserved.
 #
 #  Redistribution and use in source and binary forms, with or without
@@ -26,14 +26,36 @@
 #  POSSIBILITY OF SUCH DAMAGE.
 #
 
-if(NOT OT_EXTERNAL_MBEDTLS)
-    add_subdirectory(mbedtls)
-endif()
+cmake_policy(SET CMP0079 NEW)
 
-add_subdirectory(tcplp)
+target_include_directories(ot-config
+        INTERFACE
+        ${CMAKE_CURRENT_BINARY_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/repo/include)
 
-if(OT_CCM)
-    add_subdirectory(cn-cbor)
-    add_subdirectory(COSE-C)
-endif()
+add_library(cose-c
+        repo/src/cbor.c
+        repo/src/Cose.c
+        repo/src/Encrypt.c
+        repo/src/Encrypt0.c
+        repo/src/key.c
+        repo/src/MacMessage.c
+        repo/src/MacMessage0.c
+        repo/src/mbedtls.c
+        repo/src/Recipient.c
+        repo/src/Sign.c
+        repo/src/Sign0.c
+        repo/src/SignerInfo.c
+)
 
+target_include_directories(cose-c PUBLIC
+        ./repo/include
+        ../cn-cbor/repo/include
+        ../mbedtls/repo/include
+)
+
+target_compile_options(cose-c PRIVATE
+        ${OT_CFLAGS}
+)
+
+target_link_libraries(ot-config INTERFACE cose-c)

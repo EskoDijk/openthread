@@ -1,5 +1,5 @@
 #
-#  Copyright (c) 2019, The OpenThread Authors.
+#  Copyright (c) 2024, The OpenThread Authors.
 #  All rights reserved.
 #
 #  Redistribution and use in source and binary forms, with or without
@@ -26,14 +26,28 @@
 #  POSSIBILITY OF SUCH DAMAGE.
 #
 
-if(NOT OT_EXTERNAL_MBEDTLS)
-    add_subdirectory(mbedtls)
-endif()
+cmake_policy(SET CMP0079 NEW)
 
-add_subdirectory(tcplp)
+target_include_directories(ot-config INTERFACE
+        ${CMAKE_CURRENT_BINARY_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/repo/include
+)
 
-if(OT_CCM)
-    add_subdirectory(cn-cbor)
-    add_subdirectory(COSE-C)
-endif()
+add_library(cn-cbor
+        repo/src/cn-cbor.c
+        repo/src/cn-create.c
+        repo/src/cn-encoder.c
+        repo/src/cn-error.c
+        repo/src/cn-get.c
+        repo/src/cn-print.c
+)
 
+target_include_directories(cn-cbor PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/repo/include
+)
+
+target_compile_options(cn-cbor PRIVATE
+        ${OT_CFLAGS}
+)
+
+target_link_libraries(ot-config INTERFACE cn-cbor)
