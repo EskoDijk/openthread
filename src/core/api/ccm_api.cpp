@@ -45,9 +45,9 @@ otError otCcmSetIdevid(otInstance *aInstance, const otCcmIdevid *aIdevid)
 {
     AssertPointerIsNotNull(aIdevid);
 
-    return AsCoreType(aInstance).Get<MeshCoP::Credentials>().SetIdevid(
-        aIdevid->mCert, aIdevid->mCertLength, aIdevid->mPrivateKey, aIdevid->mPrivateKeyLength, aIdevid->mCaCert,
-        aIdevid->mCaCertLength);
+    return AsCoreType(aInstance).Get<MeshCoP::Credentials>().SetIdevid(aIdevid->mCert, aIdevid->mCertLength,
+                                                                       aIdevid->mPrivateKey, aIdevid->mPrivateKeyLength,
+                                                                       aIdevid->mCaCert, aIdevid->mCaCertLength);
 }
 
 bool otCcmHasLdevidCert(otInstance *aInstance)

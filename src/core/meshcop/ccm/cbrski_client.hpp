@@ -100,7 +100,7 @@ private:
     static const size_t kVoucherNonceLength = 8;
 
     static const mbedtls_pk_type_t    kLdevidKeyType = MBEDTLS_PK_ECKEY;
-    static const mbedtls_ecp_group_id kEcpGroupId         = MBEDTLS_ECP_DP_SECP256R1;
+    static const mbedtls_ecp_group_id kEcpGroupId    = MBEDTLS_ECP_DP_SECP256R1;
 
     /**
      * The constrained voucher request SID values defined in draft-ietf-anima-rfc8366bis-NN
