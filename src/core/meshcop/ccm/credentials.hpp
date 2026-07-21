@@ -78,6 +78,20 @@ public:
 
     const uint8_t *GetIdevidCACert(size_t &aLength);
 
+    /**
+     * Set the IDevID credentials, replacing the ones built into the firmware image.
+     *
+     * The buffers are not copied: they MUST remain valid, and MUST NOT be modified, for as long
+     * as this object may use them. For PEM-encoded data each length MUST include the terminating
+     * NUL byte, because PEM is detected only in a NUL-terminated buffer.
+     */
+    Error SetIdevid(const uint8_t *aCert,
+                    size_t         aCertLength,
+                    const uint8_t *aPrivateKey,
+                    size_t         aPrivateKeyLength,
+                    const uint8_t *aCaCert,
+                    size_t         aCaCertLength);
+
     const uint8_t *GetOperationalCert(size_t &aLength);
     Error          SetOperationalCert(const uint8_t *aCert, size_t aLength);
     bool           HasOperationalCert() const;
@@ -116,6 +130,10 @@ private:
 
     const uint8_t *mIdevidCert;
     size_t         mIdevidCertLength;
+    const uint8_t *mIdevidPrivateKey;
+    size_t         mIdevidPrivateKeyLength;
+    const uint8_t *mIdevidCACert;
+    size_t         mIdevidCACertLength;
     uint8_t        mOperationalCert[kMaxCertLength];
     size_t         mOperationalCertLength;
     KeyInfo        mOperationalPrivateKey;

@@ -49,6 +49,7 @@ source_set("openthread") {
     "border_agent_txt_data.h",
     "border_router.h",
     "border_routing.h",
+    "ccm.h",
     "channel_manager.h",
     "channel_monitor.h",
     "child_supervision.h",

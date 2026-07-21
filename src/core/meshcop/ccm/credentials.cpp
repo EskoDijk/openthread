@@ -53,6 +53,10 @@ Credentials::Credentials(Instance &aInstance)
     : InstanceLocator(aInstance)
     , mIdevidCert(reinterpret_cast<const uint8_t *>(&kIdevidCert))
     , mIdevidCertLength(sizeof(kIdevidCert))
+    , mIdevidPrivateKey(reinterpret_cast<const uint8_t *>(&kIdevidPrivateKey))
+    , mIdevidPrivateKeyLength(sizeof(kIdevidPrivateKey))
+    , mIdevidCACert(reinterpret_cast<const uint8_t *>(&kIdevidCaCert))
+    , mIdevidCACertLength(sizeof(kIdevidCaCert))
     , mOperationalCertLength(0)
     , mDomainCACertLength(0)
     , mToplevelDomainCACertLength(0)
@@ -83,9 +87,9 @@ void Credentials::Clear(void)
 
 Error Credentials::ConfigureIdevid(SecureTransport::Extension &aDtlsExtension)
 {
-    aDtlsExtension.SetCertificate(reinterpret_cast<const uint8_t *>(kIdevidCert), sizeof(kIdevidCert),
-                                  reinterpret_cast<const uint8_t *>(kIdevidPrivateKey), sizeof(kIdevidPrivateKey));
-    aDtlsExtension.SetCaCertificateChain(reinterpret_cast<const uint8_t *>(kIdevidCaCert), sizeof(kIdevidCaCert));
+    aDtlsExtension.SetCertificate(mIdevidCert, static_cast<uint32_t>(mIdevidCertLength), mIdevidPrivateKey,
+                                  static_cast<uint32_t>(mIdevidPrivateKeyLength));
+    aDtlsExtension.SetCaCertificateChain(mIdevidCACert, static_cast<uint32_t>(mIdevidCACertLength));
     aDtlsExtension.SetSslAuthMode(false); // for cBRSKI: MUST provisionally trust any Registrar
 
     return kErrorNone;
@@ -107,20 +111,47 @@ exit:
 
 const uint8_t *Credentials::GetIdevidCert(size_t &aLength)
 {
-    aLength = sizeof(kIdevidCert);
-    return reinterpret_cast<const uint8_t *>(kIdevidCert);
+    aLength = mIdevidCertLength;
+    return mIdevidCert;
 }
 
 const uint8_t *Credentials::GetIdevidPrivateKey(size_t &aLength)
 {
-    aLength = sizeof(kIdevidPrivateKey);
-    return reinterpret_cast<const uint8_t *>(kIdevidPrivateKey);
+    aLength = mIdevidPrivateKeyLength;
+    return mIdevidPrivateKey;
 }
 
 const uint8_t *Credentials::GetIdevidCACert(size_t &aLength)
 {
-    aLength = sizeof(kIdevidCaCert);
-    return reinterpret_cast<const uint8_t *>(kIdevidCaCert);
+    aLength = mIdevidCACertLength;
+    return mIdevidCACert;
+}
+
+Error Credentials::SetIdevid(const uint8_t *aCert,
+                             size_t         aCertLength,
+                             const uint8_t *aPrivateKey,
+                             size_t         aPrivateKeyLength,
+                             const uint8_t *aCaCert,
+                             size_t         aCaCertLength)
+{
+    Error error = kErrorNone;
+
+    VerifyOrExit(aCert != nullptr && aCertLength > 0, error = kErrorInvalidArgs);
+    VerifyOrExit(aPrivateKey != nullptr && aPrivateKeyLength > 0, error = kErrorInvalidArgs);
+    VerifyOrExit(aCaCert != nullptr && aCaCertLength > 0, error = kErrorInvalidArgs);
+
+    mIdevidCert             = aCert;
+    mIdevidCertLength       = aCertLength;
+    mIdevidPrivateKey       = aPrivateKey;
+    mIdevidPrivateKeyLength = aPrivateKeyLength;
+    mIdevidCACert           = aCaCert;
+    mIdevidCACertLength     = aCaCertLength;
+
+    LogInfo("IDevID set: certLen=%u keyLen=%u caCertLen=%u", static_cast<unsigned>(aCertLength),
+            static_cast<unsigned>(aPrivateKeyLength), static_cast<unsigned>(aCaCertLength));
+
+exit:
+    return error;
 }
 
 const uint8_t *Credentials::GetOperationalCert(size_t &aLength)

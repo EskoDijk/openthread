@@ -41,6 +41,7 @@ set(COMMON_SOURCES
     api/border_agent_txt_data_api.cpp
     api/border_router_api.cpp
     api/border_routing_api.cpp
+    api/ccm_api.cpp
     api/channel_manager_api.cpp
     api/channel_monitor_api.cpp
     api/child_supervision_api.cpp

@@ -120,6 +120,7 @@
  * @defgroup api-border-router           Border Router
  * @defgroup api-border-routing          Border Routing Manager
  * @defgroup api-multi-ail-detection     Border Router Multi AIL Detection
+ * @defgroup api-ccm                     Commercial Commissioning Mode (CCM)
  * @defgroup api-commissioner            Commissioner
  * @defgroup api-thread-general          General
  * @brief This module includes functions for all Thread roles.
