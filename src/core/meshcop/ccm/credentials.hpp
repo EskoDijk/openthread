@@ -84,6 +84,9 @@ public:
      * The buffers are not copied: they MUST remain valid, and MUST NOT be modified, for as long
      * as this object may use them. For PEM-encoded data each length MUST include the terminating
      * NUL byte, because PEM is detected only in a NUL-terminated buffer.
+     *
+     * Each item is parsed to validate it, and the private key is checked to belong to the cert.
+     * Nothing is stored unless all checks pass.
      */
     Error SetIdevid(const uint8_t *aCert,
                     size_t         aCertLength,

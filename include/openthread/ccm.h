@@ -91,12 +91,19 @@ typedef struct otCcmIdevid
  * Must be called before a CCM join operation is started with #otJoinerStartCcm. The credentials
  * that are set at the time the operation starts are the ones that are used.
  *
+ * Each certificate and the private key are parsed to validate them, and the private key is
+ * checked to belong to the IDevID certificate. The credentials are only stored if all of these
+ * checks pass, so a failure leaves the previous credentials in place.
+ *
  * @param[in]  aInstance  A pointer to an OpenThread instance.
  * @param[in]  aIdevid    The IDevID credentials to use. The buffers it points to are not copied,
  *                        see #otCcmIdevid.
  *
  * @retval OT_ERROR_NONE          Successfully set the IDevID credentials.
  * @retval OT_ERROR_INVALID_ARGS  A certificate or key pointer was NULL, or a length was zero.
+ * @retval OT_ERROR_PARSE         A certificate or the private key could not be parsed. For PEM
+ *                                data, check that the length includes the NUL terminator.
+ * @retval OT_ERROR_SECURITY      The private key does not belong to the IDevID certificate.
  */
 otError otCcmSetIdevid(otInstance *aInstance, const otCcmIdevid *aIdevid);
 

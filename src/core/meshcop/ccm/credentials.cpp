@@ -38,6 +38,7 @@
 #include "crypto/mbedtls.hpp"
 #include "instance/instance.hpp"
 #include "mbedtls/oid.h"
+#include "mbedtls/pk.h"
 #include "thread/key_manager.hpp"
 #include "thread/tmf.hpp"
 
@@ -134,11 +135,33 @@ Error Credentials::SetIdevid(const uint8_t *aCert,
                              const uint8_t *aCaCert,
                              size_t         aCaCertLength)
 {
-    Error error = kErrorNone;
+    Error              error = kErrorNone;
+    mbedtls_x509_crt   cert;
+    mbedtls_x509_crt   caCert;
+    mbedtls_pk_context privateKey;
+
+    mbedtls_x509_crt_init(&cert);
+    mbedtls_x509_crt_init(&caCert);
+    mbedtls_pk_init(&privateKey);
 
     VerifyOrExit(aCert != nullptr && aCertLength > 0, error = kErrorInvalidArgs);
     VerifyOrExit(aPrivateKey != nullptr && aPrivateKeyLength > 0, error = kErrorInvalidArgs);
     VerifyOrExit(aCaCert != nullptr && aCaCertLength > 0, error = kErrorInvalidArgs);
+
+    // Parse each item now, so that malformed credentials are rejected here rather than failing
+    // later during a DTLS handshake or while building a Voucher Request. A common mistake is to
+    // pass the length of a PEM buffer without its NUL terminator: PEM is then not detected and
+    // the data is parsed as DER, which fails.
+    VerifyOrExit(mbedtls_x509_crt_parse(&cert, aCert, aCertLength) == 0, error = kErrorParse);
+    VerifyOrExit(mbedtls_x509_crt_parse(&caCert, aCaCert, aCaCertLength) == 0, error = kErrorParse);
+    VerifyOrExit(mbedtls_pk_parse_key(&privateKey, aPrivateKey, aPrivateKeyLength, nullptr, 0,
+                                      Crypto::MbedTls::CryptoSecurePrng, nullptr) == 0,
+                 error = kErrorParse);
+
+    // The private key must belong to the IDevID cert. Catches a set of credentials that were
+    // combined from different device identities.
+    VerifyOrExit(mbedtls_pk_check_pair(&cert.pk, &privateKey, Crypto::MbedTls::CryptoSecurePrng, nullptr) == 0,
+                 error = kErrorSecurity);
 
     mIdevidCert             = aCert;
     mIdevidCertLength       = aCertLength;
@@ -151,6 +174,9 @@ Error Credentials::SetIdevid(const uint8_t *aCert,
             static_cast<unsigned>(aPrivateKeyLength), static_cast<unsigned>(aCaCertLength));
 
 exit:
+    mbedtls_x509_crt_free(&cert);
+    mbedtls_x509_crt_free(&caCert);
+    mbedtls_pk_free(&privateKey);
     return error;
 }
 
