@@ -72,11 +72,11 @@ public:
     Error ConfigureIdevid(SecureTransport::Extension &aDtlsExtension);
     Error ConfigureLdevid(SecureTransport::Extension &aDtlsExtension);
 
-    const uint8_t *GetManufacturerCert(size_t &aLength);
+    const uint8_t *GetIdevidCert(size_t &aLength);
 
-    const uint8_t *GetManufacturerPrivateKey(size_t &aLength);
+    const uint8_t *GetIdevidPrivateKey(size_t &aLength);
 
-    const uint8_t *GetManufacturerCACert(size_t &aLength);
+    const uint8_t *GetIdevidCACert(size_t &aLength);
 
     const uint8_t *GetOperationalCert(size_t &aLength);
     Error          SetOperationalCert(const uint8_t *aCert, size_t aLength);
@@ -104,9 +104,9 @@ public:
 
     Error GetAuthorityKeyId(uint8_t *aBuf, size_t &aLength, size_t aMaxLength);
 
-    Error GetManufacturerSerialNumber(char *aBuf, size_t aMaxLength);
+    Error GetIdevidSerialNumber(char *aBuf, size_t aMaxLength);
 
-    Error GetManufacturerSubjectName(char *aBuf, size_t aMaxLength);
+    Error GetIdevidSubjectName(char *aBuf, size_t aMaxLength);
 
     DomainName *GetDomainName();
 
@@ -114,8 +114,8 @@ private:
     Error ParseSerialNumberFromSubjectName(char *aBuf, size_t aMaxLength, const mbedtls_x509_crt &cert);
     Error ParseDomainName(DomainName &aDomainName, const uint8_t *aCert, size_t aCertLength);
 
-    const uint8_t *mManufacturerCert;
-    size_t         mManufacturerCertLength;
+    const uint8_t *mIdevidCert;
+    size_t         mIdevidCertLength;
     uint8_t        mOperationalCert[kMaxCertLength];
     size_t         mOperationalCertLength;
     KeyInfo        mOperationalPrivateKey;

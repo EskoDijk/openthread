@@ -51,8 +51,8 @@ RegisterLogModule("Credentials");
 
 Credentials::Credentials(Instance &aInstance)
     : InstanceLocator(aInstance)
-    , mManufacturerCert(reinterpret_cast<const uint8_t *>(&kIdevidCert))
-    , mManufacturerCertLength(sizeof(kIdevidCert))
+    , mIdevidCert(reinterpret_cast<const uint8_t *>(&kIdevidCert))
+    , mIdevidCertLength(sizeof(kIdevidCert))
     , mOperationalCertLength(0)
     , mDomainCACertLength(0)
     , mToplevelDomainCACertLength(0)
@@ -105,19 +105,19 @@ exit:
     return error;
 }
 
-const uint8_t *Credentials::GetManufacturerCert(size_t &aLength)
+const uint8_t *Credentials::GetIdevidCert(size_t &aLength)
 {
     aLength = sizeof(kIdevidCert);
     return reinterpret_cast<const uint8_t *>(kIdevidCert);
 }
 
-const uint8_t *Credentials::GetManufacturerPrivateKey(size_t &aLength)
+const uint8_t *Credentials::GetIdevidPrivateKey(size_t &aLength)
 {
     aLength = sizeof(kIdevidPrivateKey);
     return reinterpret_cast<const uint8_t *>(kIdevidPrivateKey);
 }
 
-const uint8_t *Credentials::GetManufacturerCACert(size_t &aLength)
+const uint8_t *Credentials::GetIdevidCACert(size_t &aLength)
 {
     aLength = sizeof(kIdevidCaCert);
     return reinterpret_cast<const uint8_t *>(kIdevidCaCert);
@@ -203,17 +203,17 @@ Error Credentials::GetAuthorityKeyId(uint8_t *aBuf, size_t &aLength, size_t aMax
 {
     static const int kTagSequence = MBEDTLS_ASN1_CONSTRUCTED | MBEDTLS_ASN1_SEQUENCE;
     Error            error        = kErrorParse;
-    mbedtls_x509_crt manufacturerCert;
+    mbedtls_x509_crt idevidCert;
     uint8_t         *p;
     const uint8_t   *end;
     size_t           len;
 
-    mbedtls_x509_crt_init(&manufacturerCert);
+    mbedtls_x509_crt_init(&idevidCert);
 
-    VerifyOrExit(mbedtls_x509_crt_parse(&manufacturerCert, mManufacturerCert, mManufacturerCertLength) == 0);
+    VerifyOrExit(mbedtls_x509_crt_parse(&idevidCert, mIdevidCert, mIdevidCertLength) == 0);
 
-    p   = manufacturerCert.v3_ext.p;
-    end = p + manufacturerCert.v3_ext.len;
+    p   = idevidCert.v3_ext.p;
+    end = p + idevidCert.v3_ext.len;
     VerifyOrExit(mbedtls_asn1_get_tag(&p, end, &len, kTagSequence) == 0);
 
     while (p < end)
@@ -251,45 +251,43 @@ Error Credentials::GetAuthorityKeyId(uint8_t *aBuf, size_t &aLength, size_t aMax
     error = kErrorNotFound;
 
 exit:
-    mbedtls_x509_crt_free(&manufacturerCert);
+    mbedtls_x509_crt_free(&idevidCert);
     return error;
 }
 
-Error Credentials::GetManufacturerSerialNumber(char *aBuf, size_t aMaxLength)
+Error Credentials::GetIdevidSerialNumber(char *aBuf, size_t aMaxLength)
 {
     Error            error;
-    mbedtls_x509_crt manufacturerCert;
+    mbedtls_x509_crt idevidCert;
 
-    mbedtls_x509_crt_init(&manufacturerCert);
-    VerifyOrExit(mbedtls_x509_crt_parse(&manufacturerCert, mManufacturerCert, mManufacturerCertLength) == 0,
-                 error = kErrorParse);
-    error = ParseSerialNumberFromSubjectName(aBuf, aMaxLength, manufacturerCert);
+    mbedtls_x509_crt_init(&idevidCert);
+    VerifyOrExit(mbedtls_x509_crt_parse(&idevidCert, mIdevidCert, mIdevidCertLength) == 0, error = kErrorParse);
+    error = ParseSerialNumberFromSubjectName(aBuf, aMaxLength, idevidCert);
 
 exit:
-    mbedtls_x509_crt_free(&manufacturerCert);
+    mbedtls_x509_crt_free(&idevidCert);
     return error;
 }
 
-Error Credentials::GetManufacturerSubjectName(char *aBuf, size_t aMaxLength)
+Error Credentials::GetIdevidSubjectName(char *aBuf, size_t aMaxLength)
 {
     Error            error = kErrorNone;
-    mbedtls_x509_crt manufacturerCert;
+    mbedtls_x509_crt idevidCert;
     int              rval;
 
-    mbedtls_x509_crt_init(&manufacturerCert);
+    mbedtls_x509_crt_init(&idevidCert);
 
-    VerifyOrExit(mbedtls_x509_crt_parse(&manufacturerCert, mManufacturerCert, mManufacturerCertLength) == 0,
-                 error = kErrorParse);
+    VerifyOrExit(mbedtls_x509_crt_parse(&idevidCert, mIdevidCert, mIdevidCertLength) == 0, error = kErrorParse);
 
     OT_ASSERT(aMaxLength > 1);
 
-    rval = mbedtls_x509_dn_gets(aBuf, aMaxLength - 1, &manufacturerCert.subject);
+    rval = mbedtls_x509_dn_gets(aBuf, aMaxLength - 1, &idevidCert.subject);
     VerifyOrExit(rval >= 0, error = kErrorFailed);
 
     aBuf[rval] = '\0';
 
 exit:
-    mbedtls_x509_crt_free(&manufacturerCert);
+    mbedtls_x509_crt_free(&idevidCert);
     return error;
 }
 

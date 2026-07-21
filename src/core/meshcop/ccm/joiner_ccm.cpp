@@ -57,8 +57,7 @@ Error Joiner::StartCcm(Operation aOperation, otJoinerCallback aCallback, void *a
 
     VerifyOrExit(mState == kStateIdle, error = kErrorBusy);
     VerifyOrExit(!Get<Seeker>().IsRunning(), error = kErrorBusy);
-    VerifyOrExit((Get<ThreadNetif>().IsUp() || aOperation == kOperationCcmAll) &&
-                     Get<Mle::Mle>().IsDisabled(),
+    VerifyOrExit((Get<ThreadNetif>().IsUp() || aOperation == kOperationCcmAll) && Get<Mle::Mle>().IsDisabled(),
                  error = kErrorInvalidState);
 
     switch (aOperation)
@@ -162,7 +161,7 @@ Error Joiner::StartCcmAll(void)
     else
     {
         mCallbackCcmAll.InvokeIfSet(kErrorNone);
-        done = true;
+        done  = true;
         error = kErrorAbort; // set abort error to signal HandleCcmAllOperationDone() to stop recursion.
     }
 
@@ -207,7 +206,8 @@ void Joiner::HandleCcmAllOperationDone(Error aErr, void *aContext)
     static_cast<Joiner *>(aContext)->HandleCcmAllOperationDone(aErr);
 }
 
-void Joiner::HandleCcmAllOperationDone(Error aErr) {
+void Joiner::HandleCcmAllOperationDone(Error aErr)
+{
     Error error;
 
     if (aErr == kErrorNone)

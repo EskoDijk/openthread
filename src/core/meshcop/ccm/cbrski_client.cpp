@@ -149,8 +149,8 @@ Error CbrskiClient::SendVoucherRequest()
     message->AppendPayloadMarker();
     message->SetOffset(message->GetLength());
 
-    SuccessOrExit(
-        error = mCoapSecure->GetPeerCertificateDer(registrarCert, &registrarCertLength, sizeof(registrarCert)));
+    SuccessOrExit(error =
+                      mCoapSecure->GetPeerCertificateDer(registrarCert, &registrarCertLength, sizeof(registrarCert)));
     VerifyOrExit(mbedtls_x509_crt_parse_der(&mRegistrarCert, registrarCert, registrarCertLength) == 0,
                  error = kErrorParse);
     OT_ASSERT(mVoucherReq == nullptr);
@@ -182,8 +182,8 @@ Error CbrskiClient::CreateVoucherRequest(VoucherRequest &aVoucherReq, mbedtls_x5
     aVoucherReq.mAssertion = kProximity;
 
     SuccessOrExit(error = Random::Crypto::FillBuffer(aVoucherReq.mNonce, sizeof(aVoucherReq.mNonce)));
-    SuccessOrExit(error = Get<Credentials>().GetManufacturerSerialNumber(aVoucherReq.mSerialNumber,
-                                                                         sizeof(aVoucherReq.mSerialNumber)));
+    SuccessOrExit(
+        error = Get<Credentials>().GetIdevidSerialNumber(aVoucherReq.mSerialNumber, sizeof(aVoucherReq.mSerialNumber)));
     keyLen = mbedtls_pk_write_pubkey_der(&aRegistrarCert.pk, aVoucherReq.mRegPubKey, sizeof(aVoucherReq.mRegPubKey));
     VerifyOrExit(keyLen > 0, error = kErrorNoBufs);
 
@@ -203,15 +203,15 @@ Error CbrskiClient::SignVoucherRequest(uint8_t              *aBuf,
     uint8_t            voucherBuf[kMaxVoucherSize];
     size_t             voucherLength;
     CoseSignObject     sign1Msg;
-    size_t             rawManufacturerKeyLength;
-    const uint8_t     *rawManufacturerKey;
-    mbedtls_pk_context manufacturerKey;
+    size_t             rawIdevidKeyLength;
+    const uint8_t     *rawIdevidKey;
+    mbedtls_pk_context idevidKey;
 
-    mbedtls_pk_init(&manufacturerKey);
+    mbedtls_pk_init(&idevidKey);
 
-    rawManufacturerKey = Get<Credentials>().GetManufacturerPrivateKey(rawManufacturerKeyLength);
+    rawIdevidKey = Get<Credentials>().GetIdevidPrivateKey(rawIdevidKeyLength);
 
-    VerifyOrExit(mbedtls_pk_parse_key(&manufacturerKey, rawManufacturerKey, rawManufacturerKeyLength, nullptr, 0,
+    VerifyOrExit(mbedtls_pk_parse_key(&idevidKey, rawIdevidKey, rawIdevidKeyLength, nullptr, 0,
                                       Crypto::MbedTls::CryptoSecurePrng, nullptr) == 0,
                  error = kErrorParse);
 
@@ -221,7 +221,7 @@ Error CbrskiClient::SignVoucherRequest(uint8_t              *aBuf,
     SuccessOrExit(error = sign1Msg.SetContent(voucherBuf, voucherLength));
     SuccessOrExit(error =
                       sign1Msg.AddAttribute(COSE_Header_Algorithm, COSE_Algorithm_ECDSA_SHA_256, COSE_PROTECT_ONLY));
-    SuccessOrExit(error = sign1Msg.Sign(manufacturerKey));
+    SuccessOrExit(error = sign1Msg.Sign(idevidKey));
     SuccessOrExit(error = sign1Msg.Serialize(aBuf, aLength, aBufLength));
 
 exit:
@@ -371,21 +371,21 @@ Error CbrskiClient::ProcessVoucher(const uint8_t *aVoucher, size_t aVoucherLengt
     size_t           idevidIssuerLen;
     CoseSignObject   coseSign;
     CborMap          voucher, container;
-    mbedtls_x509_crt manufacturerCACert;
+    mbedtls_x509_crt idevidCACert;
     uint32_t         certVerifyResultFlags;
     int              numChecksPassed = 0;
 
-    mbedtls_x509_crt_init(&manufacturerCACert);
-    cert = Get<Credentials>().GetManufacturerCACert(certLen); // sets certLen
+    mbedtls_x509_crt_init(&idevidCACert);
+    cert = Get<Credentials>().GetIdevidCACert(certLen); // sets certLen
     OT_ASSERT(cert != nullptr);
     numChecksPassed++;
 
-    VerifyOrExit(mbedtls_x509_crt_parse(&manufacturerCACert, cert, certLen) == 0, error = kErrorSecurity);
+    VerifyOrExit(mbedtls_x509_crt_parse(&idevidCACert, cert, certLen) == 0, error = kErrorSecurity);
     numChecksPassed++;
 
     SuccessOrExit(error = CoseSignObject::Deserialize(coseSign, aVoucher, aVoucherLength));
     numChecksPassed++;
-    SuccessOrExit(error = coseSign.Validate(manufacturerCACert.pk));
+    SuccessOrExit(error = coseSign.Validate(idevidCACert.pk));
     numChecksPassed++;
 
     rawVoucher = coseSign.GetPayload(voucherLen);
@@ -471,7 +471,7 @@ exit:
     container.Free();
     voucher.Free();
     coseSign.Free();
-    mbedtls_x509_crt_free(&manufacturerCACert);
+    mbedtls_x509_crt_free(&idevidCACert);
     Instance::GetHeap().Free(mVoucherReq); // free the voucher req after we're done with the Voucher.
     mVoucherReq = nullptr;
 
@@ -604,7 +604,7 @@ Error CbrskiClient::SendEnrollRequest()
     SuccessOrExit(error = mOperationalKey.Generate());
     numChecksPassed++;
 
-    SuccessOrExit(error = Get<Credentials>().GetManufacturerSubjectName(subjectName, sizeof(subjectName)));
+    SuccessOrExit(error = Get<Credentials>().GetIdevidSubjectName(subjectName, sizeof(subjectName)));
     numChecksPassed++;
 
     SuccessOrExit(error = CreateCsrData(mOperationalKey, subjectName, csrData, sizeof(csrData), csrDataLen));
