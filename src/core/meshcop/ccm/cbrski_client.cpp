@@ -66,7 +66,7 @@ CbrskiClient::CbrskiClient(Instance &aInstance)
     mbedtls_x509_crt_init(&mRegistrarCert);
     mbedtls_x509_crt_init(&mPinnedDomainCert);
     mbedtls_x509_crt_init(&mDomainCaCert);
-    mbedtls_x509_crt_init(&mOperationalCert);
+    mbedtls_x509_crt_init(&mLdevidCert);
     mbedtls_entropy_init(&mEntropyContext);
 }
 
@@ -78,13 +78,13 @@ void CbrskiClient::StartEnroll(Tmf::SecureAgent &aConnectedCoapSecure, otJoinerC
     VerifyOrExit(!IsBusy(), error = kErrorInvalidState);
 
     mCoapSecure      = &aConnectedCoapSecure;
-    mIsDoingReenroll = Get<Credentials>().HasOperationalCert();
+    mIsDoingReenroll = Get<Credentials>().HasLdevidCert();
     mCallback.Set(aCallback, aContext);
 
     mbedtls_x509_crt_init(&mRegistrarCert);
     mbedtls_x509_crt_init(&mPinnedDomainCert);
     mbedtls_x509_crt_init(&mDomainCaCert);
-    mbedtls_x509_crt_init(&mOperationalCert);
+    mbedtls_x509_crt_init(&mLdevidCert);
     mbedtls_entropy_init(&mEntropyContext);
     // FIXME: 16 as constant; check why duplicate code with crypto_platform.cpp for creating source.
     mbedtls_entropy_add_source(&mEntropyContext, cbrski_ctr_drbg_random_func_2, nullptr, 16,
@@ -120,7 +120,7 @@ void CbrskiClient::Finish(Error aError, bool aInvokeCallback)
         mbedtls_x509_crt_free(&mRegistrarCert);
         mbedtls_x509_crt_free(&mPinnedDomainCert);
         mbedtls_x509_crt_free(&mDomainCaCert);
-        mbedtls_x509_crt_free(&mOperationalCert);
+        mbedtls_x509_crt_free(&mLdevidCert);
         mbedtls_entropy_free(&mEntropyContext);
 
         if (aInvokeCallback)
@@ -545,15 +545,15 @@ Error CbrskiClient::ProcessCertsIntoTrustStore()
     uint32_t certVerifyResultFlags;
 
     // store my new LDevID, its private key, and Domain CA cert.
-    SuccessOrExit(error = Get<Credentials>().SetOperationalCert(mOperationalCert.raw.p, mOperationalCert.raw.len));
+    SuccessOrExit(error = Get<Credentials>().SetLdevidCert(mLdevidCert.raw.p, mLdevidCert.raw.len));
     numChecksPassed++;
     SuccessOrExit(error = Get<Credentials>().SetDomainCACert(mDomainCaCert.raw.p, mDomainCaCert.raw.len));
     numChecksPassed++;
     // Mbedtls writes the key to the end of the buffer
-    VerifyOrExit(Get<Credentials>().SetOperationalPrivateKey(mOperationalKey) == kErrorNone);
+    VerifyOrExit(Get<Credentials>().SetLdevidPrivateKey(mLdevidKey) == kErrorNone);
     numChecksPassed++;
 
-    // TODO(wgtdkp): trigger event: OT_CHANGED_OPERATIONAL_CERT.
+    // TODO(wgtdkp): trigger event: OT_CHANGED_LDEVID_CERT.
 
     // verify if pinned-domain-cert is the signer of the Domain CA cert, and if so, store
     // pinned-domain-cert as top-level CA in the Trust Store. If not, then the
@@ -600,14 +600,14 @@ Error CbrskiClient::SendEnrollRequest()
     numChecksPassed++;
     message->SetOffset(message->GetLength());
 
-    // Always generate new operational key for LDevID, for both enroll and reenroll.
-    SuccessOrExit(error = mOperationalKey.Generate());
+    // Always generate a new LDevID key, for both enroll and reenroll.
+    SuccessOrExit(error = mLdevidKey.Generate());
     numChecksPassed++;
 
     SuccessOrExit(error = Get<Credentials>().GetIdevidSubjectName(subjectName, sizeof(subjectName)));
     numChecksPassed++;
 
-    SuccessOrExit(error = CreateCsrData(mOperationalKey, subjectName, csrData, sizeof(csrData), csrDataLen));
+    SuccessOrExit(error = CreateCsrData(mLdevidKey, subjectName, csrData, sizeof(csrData), csrDataLen));
     numChecksPassed++;
 
     OT_ASSERT(csrDataLen <= sizeof(csrData));
@@ -659,7 +659,7 @@ void CbrskiClient::HandleEnrollResponse(Coap::Msg *aMsg, Error aResult)
 
     // process the new LDevID cert, and determine if I need to do additional cacerts request (isNeedCaCertsRequest will
     // be set)
-    SuccessOrExit(error = ProcessOperationalCert(cert, certLen, isNeedCaCertsRequest));
+    SuccessOrExit(error = ProcessLdevidCert(cert, certLen, isNeedCaCertsRequest));
     numChecksPassed++;
 
     // if cert not correct, assume we need a new Domain CA cert - fetch it using /crts, and then later verify again.
@@ -685,7 +685,7 @@ exit:
     }
 }
 
-Error CbrskiClient::ProcessOperationalCert(const uint8_t *aCert, size_t aLength, bool &isNeedCaCertsRequest)
+Error CbrskiClient::ProcessLdevidCert(const uint8_t *aCert, size_t aLength, bool &isNeedCaCertsRequest)
 {
     Error    error = kErrorSecurity;
     uint32_t certVerifyResultFlags;
@@ -694,12 +694,12 @@ Error CbrskiClient::ProcessOperationalCert(const uint8_t *aCert, size_t aLength,
 
     LogDebg("Validating new LDevID cert - len=%luB", aLength);
 
-    VerifyOrExit((mbedtlsErrorCode = mbedtls_x509_crt_parse_der(&mOperationalCert, aCert, aLength)) == 0);
+    VerifyOrExit((mbedtlsErrorCode = mbedtls_x509_crt_parse_der(&mLdevidCert, aCert, aLength)) == 0);
     numChecksPassed++;
 
     // TODO(wgtdkp): match the certificate against CSR
 
-    // TODO(wgtdkp): make sure mOperationalKey matches public key in the cert
+    // TODO(wgtdkp): make sure mLdevidKey matches public key in the cert
 
     // TODO(wgtdkp): set expected Common Name.
 
@@ -709,7 +709,7 @@ Error CbrskiClient::ProcessOperationalCert(const uint8_t *aCert, size_t aLength,
     isNeedCaCertsRequest = true;
     if (mIsDoingReenroll)
     {
-        mbedtlsErrorCode = mbedtls_x509_crt_verify(&mOperationalCert, &mDomainCaCert, nullptr, nullptr,
+        mbedtlsErrorCode = mbedtls_x509_crt_verify(&mLdevidCert, &mDomainCaCert, nullptr, nullptr,
                                                    &certVerifyResultFlags, nullptr, nullptr);
         if (mbedtlsErrorCode == 0)
             isNeedCaCertsRequest = false;
@@ -718,7 +718,7 @@ Error CbrskiClient::ProcessOperationalCert(const uint8_t *aCert, size_t aLength,
     {
         if (mbedtls_x509_crt_get_ca_istrue(&mPinnedDomainCert))
         {
-            mbedtlsErrorCode = mbedtls_x509_crt_verify(&mOperationalCert, &mPinnedDomainCert, nullptr, nullptr,
+            mbedtlsErrorCode = mbedtls_x509_crt_verify(&mLdevidCert, &mPinnedDomainCert, nullptr, nullptr,
                                                        &certVerifyResultFlags, nullptr, nullptr);
             if (mbedtlsErrorCode == 0)
             {

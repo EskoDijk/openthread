@@ -50,19 +50,19 @@ otError otCcmSetIdevid(otInstance *aInstance, const otCcmIdevid *aIdevid)
         aIdevid->mCaCertLength);
 }
 
-bool otCcmHasOperationalCert(otInstance *aInstance)
+bool otCcmHasLdevidCert(otInstance *aInstance)
 {
-    return AsCoreType(aInstance).Get<MeshCoP::Credentials>().HasOperationalCert();
+    return AsCoreType(aInstance).Get<MeshCoP::Credentials>().HasLdevidCert();
 }
 
-const uint8_t *otCcmGetOperationalCert(otInstance *aInstance, uint16_t *aLength)
+const uint8_t *otCcmGetLdevidCert(otInstance *aInstance, uint16_t *aLength)
 {
     size_t         length;
     const uint8_t *cert;
 
     AssertPointerIsNotNull(aLength);
 
-    cert     = AsCoreType(aInstance).Get<MeshCoP::Credentials>().GetOperationalCert(length);
+    cert     = AsCoreType(aInstance).Get<MeshCoP::Credentials>().GetLdevidCert(length);
     *aLength = static_cast<uint16_t>(length);
 
     return cert;

@@ -92,12 +92,12 @@ public:
                     const uint8_t *aCaCert,
                     size_t         aCaCertLength);
 
-    const uint8_t *GetOperationalCert(size_t &aLength);
-    Error          SetOperationalCert(const uint8_t *aCert, size_t aLength);
-    bool           HasOperationalCert() const;
+    const uint8_t *GetLdevidCert(size_t &aLength);
+    Error          SetLdevidCert(const uint8_t *aCert, size_t aLength);
+    bool           HasLdevidCert() const;
 
-    const KeyInfo *GetOperationalPrivateKey();
-    Error          SetOperationalPrivateKey(const KeyInfo &privKey);
+    const KeyInfo *GetLdevidPrivateKey();
+    Error          SetLdevidPrivateKey(const KeyInfo &privKey);
 
     const uint8_t *GetDomainCACert(size_t &aLength);
     Error          SetDomainCACert(const uint8_t *aCert, size_t aLength);
@@ -134,15 +134,15 @@ private:
     size_t         mIdevidPrivateKeyLength;
     const uint8_t *mIdevidCACert;
     size_t         mIdevidCACertLength;
-    uint8_t        mOperationalCert[kMaxCertLength];
-    size_t         mOperationalCertLength;
-    KeyInfo        mOperationalPrivateKey;
+    uint8_t        mLdevidCert[kMaxCertLength];
+    size_t         mLdevidCertLength;
+    KeyInfo        mLdevidPrivateKey;
     uint8_t        mDomainCACert[kMaxCertLength];
     size_t         mDomainCACertLength;
     uint8_t        mToplevelDomainCACert[kMaxCertLength];
     size_t         mToplevelDomainCACertLength;
 
-    DomainName mDomainName; ///< Thread Domain Name, taken from a subfield of SubjectAltName of operational cert
+    DomainName mDomainName; ///< Thread Domain Name, taken from a subfield of SubjectAltName of LDevID cert
 };
 
 } // namespace MeshCoP

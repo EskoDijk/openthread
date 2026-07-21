@@ -99,7 +99,7 @@ private:
     static const size_t kMaxVoucherSize     = 1024; // MASA service of Vendor defines max voucher size.
     static const size_t kVoucherNonceLength = 8;
 
-    static const mbedtls_pk_type_t    kOperationalKeyType = MBEDTLS_PK_ECKEY;
+    static const mbedtls_pk_type_t    kLdevidKeyType = MBEDTLS_PK_ECKEY;
     static const mbedtls_ecp_group_id kEcpGroupId         = MBEDTLS_ECP_DP_SECP256R1;
 
     /**
@@ -190,11 +190,11 @@ private:
     Error ProcessVoucher(const uint8_t *aVoucher, size_t aVoucherLength);
 
     /**
-     * Process a received LDevID operational cert, verify syntax, and store as 'mOperationalCert' in this EstClient.
+     * Process a received LDevID cert, verify syntax, and store as 'mLdevidCert' in this EstClient.
      * @param [out] isNeedCaCertsRequest set True if a CA Certs (/crts) request is needed additionally to obtain
      *                                   the Domain CA cert needed to validate the LDevID. False, if not needed.
      */
-    Error ProcessOperationalCert(const uint8_t *aCert, size_t aLength, bool &isNeedCaCertsRequest);
+    Error ProcessLdevidCert(const uint8_t *aCert, size_t aLength, bool &isNeedCaCertsRequest);
 
     /**
      * Store the LDevID, Domain CA, toplevel Domain CA (if present), all into the local Credentials store (Trust Store).
@@ -232,11 +232,11 @@ private:
     // Domain CA cert, if any, from EST /crts obtained during this session or from own Trust Store.
     mbedtls_x509_crt mDomainCaCert;
 
-    // LDevID operational cert, if any, obtained with EST (/sen, /sren) during this session
-    mbedtls_x509_crt mOperationalCert;
+    // LDevID cert, if any, obtained with EST (/sen, /sren) during this session
+    mbedtls_x509_crt mLdevidCert;
 
-    // LDevID operational public key generated during this session.
-    KeyInfo mOperationalKey;
+    // LDevID public key generated during this session.
+    KeyInfo mLdevidKey;
 
     mbedtls_entropy_context mEntropyContext;
 };

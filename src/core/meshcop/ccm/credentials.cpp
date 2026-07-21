@@ -57,7 +57,7 @@ Credentials::Credentials(Instance &aInstance)
     , mIdevidPrivateKeyLength(sizeof(kIdevidPrivateKey))
     , mIdevidCACert(reinterpret_cast<const uint8_t *>(&kIdevidCaCert))
     , mIdevidCACertLength(sizeof(kIdevidCaCert))
-    , mOperationalCertLength(0)
+    , mLdevidCertLength(0)
     , mDomainCACertLength(0)
     , mToplevelDomainCACertLength(0)
 {
@@ -79,8 +79,8 @@ Error Credentials::Store(void)
 void Credentials::Clear(void)
 {
     // TODO(wgtdkp): remove those certs and keys from cache and flash
-    mOperationalCertLength = 0;
-    mOperationalPrivateKey.SetDerLength(0);
+    mLdevidCertLength = 0;
+    mLdevidPrivateKey.SetDerLength(0);
     mDomainCACertLength         = 0;
     mToplevelDomainCACertLength = 0;
 }
@@ -98,10 +98,10 @@ Error Credentials::ConfigureIdevid(SecureTransport::Extension &aDtlsExtension)
 Error Credentials::ConfigureLdevid(SecureTransport::Extension &aDtlsExtension)
 {
     Error error = kErrorNone;
-    VerifyOrExit(HasOperationalCert(), error = kErrorInvalidState);
+    VerifyOrExit(HasLdevidCert(), error = kErrorInvalidState);
 
-    aDtlsExtension.SetCertificate(reinterpret_cast<const uint8_t *>(mOperationalCert), mOperationalCertLength,
-                                  mOperationalPrivateKey.GetDerBytes(), mOperationalPrivateKey.GetDerLength());
+    aDtlsExtension.SetCertificate(reinterpret_cast<const uint8_t *>(mLdevidCert), mLdevidCertLength,
+                                  mLdevidPrivateKey.GetDerBytes(), mLdevidPrivateKey.GetDerLength());
     aDtlsExtension.SetCaCertificateChain(reinterpret_cast<const uint8_t *>(mDomainCACert), mDomainCACertLength);
     aDtlsExtension.SetSslAuthMode(true); // for LDevID ops: MUST trust Domain's Commissioner or Registrar.
 
@@ -154,19 +154,19 @@ exit:
     return error;
 }
 
-const uint8_t *Credentials::GetOperationalCert(size_t &aLength)
+const uint8_t *Credentials::GetLdevidCert(size_t &aLength)
 {
-    aLength = mOperationalCertLength;
-    return mOperationalCert;
+    aLength = mLdevidCertLength;
+    return mLdevidCert;
 }
 
-Error Credentials::SetOperationalCert(const uint8_t *aCert, size_t aLength)
+Error Credentials::SetLdevidCert(const uint8_t *aCert, size_t aLength)
 {
     Error error = kErrorNone;
 
     if (aCert == nullptr || aLength == 0)
     {
-        mOperationalCertLength = 0;
+        mLdevidCertLength = 0;
         ExitNow();
     }
     VerifyOrExit(aLength <= kMaxCertLength, error = kErrorInvalidArgs);
@@ -179,20 +179,20 @@ Error Credentials::SetOperationalCert(const uint8_t *aCert, size_t aLength)
     // TODO validate if changing domain name while Thread/radio remains active works ok.
     SuccessOrExit(error = Get<MeshCoP::NetworkIdentity>().SetDomainName(mDomainName.GetAsData()));
 
-    memcpy(mOperationalCert, aCert, aLength);
-    mOperationalCertLength = aLength;
+    memcpy(mLdevidCert, aCert, aLength);
+    mLdevidCertLength = aLength;
 
 exit:
     return error;
 }
 
-bool Credentials::HasOperationalCert(void) const { return mOperationalCertLength > 0; }
+bool Credentials::HasLdevidCert(void) const { return mLdevidCertLength > 0; }
 
-const KeyInfo *Credentials::GetOperationalPrivateKey() { return &mOperationalPrivateKey; }
+const KeyInfo *Credentials::GetLdevidPrivateKey() { return &mLdevidPrivateKey; }
 
-Error Credentials::SetOperationalPrivateKey(const KeyInfo &privKey)
+Error Credentials::SetLdevidPrivateKey(const KeyInfo &privKey)
 {
-    mOperationalPrivateKey = privKey;
+    mLdevidPrivateKey = privKey;
     return kErrorNone;
 }
 

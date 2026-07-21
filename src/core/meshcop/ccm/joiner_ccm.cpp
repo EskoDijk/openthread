@@ -63,11 +63,11 @@ Error Joiner::StartCcm(Operation aOperation, otJoinerCallback aCallback, void *a
     switch (aOperation)
     {
     case kOperationCcmAeCbrski:
-        VerifyOrExit(!Get<Credentials>().HasOperationalCert(), error = kErrorInvalidState);
+        VerifyOrExit(!Get<Credentials>().HasLdevidCert(), error = kErrorInvalidState);
         SuccessOrExit(error = Get<Seeker>().SetUdpPort(kCcmCbrskiJoinerUdpSourcePort));
         break;
     case kOperationCcmNkp:
-        VerifyOrExit(Get<Credentials>().HasOperationalCert(), error = kErrorInvalidState);
+        VerifyOrExit(Get<Credentials>().HasLdevidCert(), error = kErrorInvalidState);
         SuccessOrExit(error = Get<Seeker>().SetUdpPort(kCcmNkpJoinerUdpSourcePort));
         break;
     case kOperationCcmAll:
@@ -134,7 +134,7 @@ Error Joiner::StartCcmAll(void)
 {
     Error error;
     bool  done      = false;
-    bool  isNeedAe  = !Get<Credentials>().HasOperationalCert();
+    bool  isNeedAe  = !Get<Credentials>().HasLdevidCert();
     bool  isNeedNkp = !Get<ActiveDatasetManager>().IsComplete() && !Get<ActiveDatasetManager>().IsPartiallyComplete();
     bool  isNeedUp  = !Get<ThreadNetif>().IsUp();
     bool  isNeedThreadStart = Get<Mle::Mle>().IsDisabled();

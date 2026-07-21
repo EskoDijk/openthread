@@ -101,34 +101,34 @@ typedef struct otCcmIdevid
 otError otCcmSetIdevid(otInstance *aInstance, const otCcmIdevid *aIdevid);
 
 /**
- * Indicates whether this device stores an operational certificate (LDevID).
+ * Indicates whether this device stores an LDevID certificate.
  *
  * A device obtains an LDevID by completing enrollment, for example Autonomous Enrollment (AE)
  * using cBRSKI. An LDevID is a prerequisite for Network Key Provisioning (NKP).
  *
  * @param[in]  aInstance  A pointer to an OpenThread instance.
  *
- * @retval TRUE   The device stores an operational certificate.
- * @retval FALSE  The device does not store an operational certificate.
+ * @retval TRUE   The device stores an LDevID certificate.
+ * @retval FALSE  The device does not store an LDevID certificate.
  */
-bool otCcmHasOperationalCert(otInstance *aInstance);
+bool otCcmHasLdevidCert(otInstance *aInstance);
 
 /**
- * Gets the operational certificate (LDevID) that this device stores.
+ * Gets the LDevID certificate that this device stores.
  *
  * @param[in]   aInstance  A pointer to an OpenThread instance.
  * @param[out]  aLength    A pointer to where the certificate length is placed. MUST NOT be NULL.
- *                         Is set to zero if the device stores no operational certificate.
+ *                         Is set to zero if the device stores no LDevID certificate.
  *
- * @returns A pointer to the operational certificate, in DER format.
+ * @returns A pointer to the LDevID certificate, in DER format.
  */
-const uint8_t *otCcmGetOperationalCert(otInstance *aInstance, uint16_t *aLength);
+const uint8_t *otCcmGetLdevidCert(otInstance *aInstance, uint16_t *aLength);
 
 /**
  * Gets the Thread Domain Name of this device.
  *
- * The Domain Name is taken from a SubjectAltName field of the operational certificate. It is the
- * default Domain Name if the device stores no operational certificate.
+ * The Domain Name is taken from a SubjectAltName field of the LDevID certificate. It is the
+ * default Domain Name if the device stores no LDevID certificate.
  *
  * @param[in]  aInstance  A pointer to an OpenThread instance.
  *
