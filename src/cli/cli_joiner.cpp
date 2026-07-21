@@ -227,7 +227,8 @@ template <> otError Joiner::Process<Cmd("startccm")>(Arg aArgs[])
     OT_UNUSED_VARIABLE(aArgs);
     otError error;
 
-    error = otJoinerStartCcm(GetInstancePtr(), otJoinOperation::OT_JOIN_OPERATION_CCM_ALL, &Joiner::HandleCallback, this);
+    error =
+        otJoinerStartCcm(GetInstancePtr(), otJoinOperation::OT_JOIN_OPERATION_CCM_ALL, &Joiner::HandleCallback, this);
 
     return error;
 }
@@ -284,16 +285,11 @@ otError Joiner::Process(Arg aArgs[])
 #define CmdEntry(aCommandString) {aCommandString, &Joiner::Process<Cmd(aCommandString)>}
 
     static constexpr Command kCommands[] = {
-        CmdEntry("discerner"),
-        CmdEntry("id"),
-        CmdEntry("start"),
+        CmdEntry("discerner"), CmdEntry("id"),       CmdEntry("start"),
 #if OPENTHREAD_CONFIG_CCM_ENABLE
-        CmdEntry("startae"),
-        CmdEntry("startccm"),
-        CmdEntry("startnkp"),
+        CmdEntry("startae"),   CmdEntry("startccm"), CmdEntry("startnkp"),
 #endif
-        CmdEntry("state"),
-        CmdEntry("stop"),
+        CmdEntry("state"),     CmdEntry("stop"),
     };
 
 #undef CmdEntry

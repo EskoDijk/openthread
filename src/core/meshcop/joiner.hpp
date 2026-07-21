@@ -226,15 +226,15 @@ public:
 private:
     // The configured Joiner port denotes the MeshCoP protocol port. Other ports are derived from this single
     // config. Protocol info is multiplexed into the 4 lower bits of the Joiner (source) port number.
-    static constexpr uint16_t kJoinerUdpPortBase            = (OPENTHREAD_CONFIG_JOINER_UDP_PORT - kOperationMeshcop);
-    static constexpr uint16_t kMeshcopJoinerUdpSourcePort   = kJoinerUdpPortBase + kOperationMeshcop;
+    static constexpr uint16_t kJoinerUdpPortBase          = (OPENTHREAD_CONFIG_JOINER_UDP_PORT - kOperationMeshcop);
+    static constexpr uint16_t kMeshcopJoinerUdpSourcePort = kJoinerUdpPortBase + kOperationMeshcop;
 #if OPENTHREAD_CONFIG_CCM_ENABLE
     static constexpr uint16_t kCcmCbrskiJoinerUdpSourcePort = kJoinerUdpPortBase + kOperationCcmAeCbrski;
     static constexpr uint16_t kCcmNkpJoinerUdpSourcePort    = kJoinerUdpPortBase + kOperationCcmNkp;
     static_assert(kMeshcopJoinerUdpSourcePort % 16 == kOperationMeshcop,
                   "OPENTHREAD_CONFIG_JOINER_UDP_PORT modulo 16 must be 0 for MeshCoP-CCM");
     static constexpr uint32_t kCcmCbrskiVoucherResponseTimeout =
-       12000; // Max wait time for cBRSKI to receive voucher response (in msec), TODO adapt value.
+        12000; // Max wait time for cBRSKI to receive voucher response (in msec), TODO adapt value.
 #endif
     static constexpr uint32_t kConfigExtAddressDelay = 100;  // in msec.
     static constexpr uint32_t kResponseTimeout       = 4000; // in msec

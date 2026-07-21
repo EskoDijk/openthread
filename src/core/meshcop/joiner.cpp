@@ -342,9 +342,7 @@ void Joiner::HandleSecureCoapClientConnect(Dtls::Session::ConnectEvent aEvent)
             break;
         }
 #if OPENTHREAD_CONFIG_CCM_ENABLE
-        mTimer.Start((mJoinerOperation == kOperationCcmAeCbrski)
-                         ? kCcmCbrskiVoucherResponseTimeout
-                         : kResponseTimeout);
+        mTimer.Start((mJoinerOperation == kOperationCcmAeCbrski) ? kCcmCbrskiVoucherResponseTimeout : kResponseTimeout);
 #else
         mTimer.Start(kResponseTimeout);
 #endif

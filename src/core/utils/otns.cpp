@@ -207,10 +207,9 @@ void Otns::EmitCoapStatus(const char             *aAction,
     SuccessOrExit(error = aMessage.ParseHeaderInfo(header));
     SuccessOrExit(error = aMessage.ReadUriPathOptions(uriPath));
 
-    string.Append("coap=%s,%d,%d,%d,%s,%s,%d,%s,%d", aAction, header.GetMessageId(), header.GetType(),
-                  header.GetCode(), uriPath, aMessageInfo.GetPeerAddr().ToString().AsCString(),
-                  aMessageInfo.GetPeerPort(), aMessageInfo.GetSockAddr().ToString().AsCString(),
-                  aMessageInfo.GetSockPort());
+    string.Append("coap=%s,%d,%d,%d,%s,%s,%d,%s,%d", aAction, header.GetMessageId(), header.GetType(), header.GetCode(),
+                  uriPath, aMessageInfo.GetPeerAddr().ToString().AsCString(), aMessageInfo.GetPeerPort(),
+                  aMessageInfo.GetSockAddr().ToString().AsCString(), aMessageInfo.GetSockPort());
 
     if (aError != nullptr)
     {
