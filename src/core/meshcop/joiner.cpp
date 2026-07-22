@@ -349,7 +349,12 @@ void Joiner::HandleSecureCoapClientConnect(Dtls::Session::ConnectEvent aEvent)
     }
     else
     {
-        TryNextCandidate(kErrorSecurity);
+        // A DTLS handshake that ran out of re-transmissions means the
+        // Joiner Router or the Commissioner behind it never answered,
+        // which is a different failure than a rejected handshake.
+
+        LogInfo("Connect to candidate failed: %s", Dtls::Session::ConnectEventToString(aEvent));
+        TryNextCandidate((aEvent == Dtls::Session::kDisconnectedTimeout) ? kErrorResponseTimeout : kErrorSecurity);
     }
 
 exit:

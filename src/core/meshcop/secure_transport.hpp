@@ -237,6 +237,17 @@ public:
      */
     SecureTransport &GetTransport(void) { return mTransport; }
 
+#if OT_SHOULD_LOG_AT(OT_LOG_LEVEL_WARN)
+    /**
+     * Converts a `ConnectEvent` to a human-readable string.
+     *
+     * @param[in] aEvent  The connect event.
+     *
+     * @returns A string representation of @p aEvent.
+     */
+    static const char *ConnectEventToString(ConnectEvent aEvent);
+#endif
+
 protected:
     explicit SecureSession(SecureTransport &aTransport);
     ~SecureSession(void) { FreeMbedtls(); }

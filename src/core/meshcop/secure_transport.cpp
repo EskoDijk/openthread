@@ -571,6 +571,14 @@ void SecureSession::Process(void)
         case MBEDTLS_ERR_SSL_HELLO_VERIFY_REQUIRED:
             break;
 
+        case MBEDTLS_ERR_SSL_TIMEOUT:
+            // The peer did not respond within the (re-transmission)
+            // budget, e.g., it is unreachable or silently dropping our
+            // records. There is no point in sending an alert to it.
+
+            disconnectEvent = kDisconnectedTimeout;
+            break;
+
         case MBEDTLS_ERR_SSL_FATAL_ALERT_MESSAGE:
             disconnectEvent = kDisconnectedError;
             break;
@@ -597,6 +605,16 @@ void SecureSession::Process(void)
 
         if (disconnectEvent != kConnected)
         {
+            if (disconnectEvent == kDisconnectedPeerClosed)
+            {
+                LogInfo("Session %s: peer closed", IsConnecting() ? "handshake" : "read");
+            }
+            else
+            {
+                LogWarn("Session %s failed: %s (mbedTLS error -0x%04x)", IsConnecting() ? "handshake" : "read",
+                        ConnectEventToString(disconnectEvent), static_cast<uint16_t>(-rval));
+            }
+
             Disconnect(disconnectEvent);
         }
         else if (shouldReset)
@@ -627,6 +645,25 @@ const char *SecureSession::StateToString(State aState)
     DefineEnumStringArray(StateMapList);
 
     return kStrings[aState];
+}
+
+#endif
+
+#if OT_SHOULD_LOG_AT(OT_LOG_LEVEL_WARN)
+
+const char *SecureSession::ConnectEventToString(ConnectEvent aEvent)
+{
+#define ConnectEventMapList(_)                 \
+    _(kConnected, "Connected")                 \
+    _(kDisconnectedPeerClosed, "PeerClosed")   \
+    _(kDisconnectedLocalClosed, "LocalClosed") \
+    _(kDisconnectedMaxAttempts, "MaxAttempts") \
+    _(kDisconnectedError, "Error")             \
+    _(kDisconnectedTimeout, "Timeout")
+
+    DefineEnumStringArray(ConnectEventMapList);
+
+    return kStrings[aEvent];
 }
 
 #endif
