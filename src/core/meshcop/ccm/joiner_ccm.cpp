@@ -104,10 +104,15 @@ Error Joiner::StartCcm(Operation aOperation, otJoinerCallback aCallback, void *a
     {
     case kOperationCcmAeCbrski:
         SuccessOrExit(error = Get<Credentials>().ConfigureIdevid(Get<Tmf::SecureAgent>()));
+        Get<Tmf::SecureAgent>().SetKekExtraction(false);
         break;
     case kOperationCcmNkp:
         SuccessOrExit(error = PrepareCcmNkpJoinerFinalizeMessage());
         SuccessOrExit(error = Get<Credentials>().ConfigureLdevid(Get<Tmf::SecureAgent>()));
+
+        // NKP session is certificate-based, so the KEK that secures the subsequent
+        // Joiner Entrust message must be derived explicitly.
+        Get<Tmf::SecureAgent>().SetKekExtraction(true);
         break;
     default:
         break;

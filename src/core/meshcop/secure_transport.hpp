@@ -750,6 +750,20 @@ public:
      */
     void SetPsk(const JoinerPskd &aPskd);
 
+#if OPENTHREAD_CONFIG_CCM_ENABLE
+    /**
+     * Enables or disables derivation of the KEK from the DTLS session's key block.
+     *
+     * The KEK is normally only derived for the ECJPAKE cipher suite, i.e. for a MeshCoP joining session. CCM
+     * Network Key Provisioning (NKP) uses a certificate-based (LDevID) session instead, but still relies on the
+     * KEK to secure the Joiner Entrust message. Such a user of the transport must enable KEK derivation
+     * explicitly. It is disabled again when the transport is closed.
+     *
+     * @param[in] aEnable  TRUE to derive the KEK regardless of cipher suite, FALSE otherwise.
+     */
+    void SetKekExtraction(bool aEnable) { mExtractKek = aEnable; }
+#endif
+
     /**
      * Checks and handles a received message provided to the `SecureTransport`.
      *
@@ -812,6 +826,7 @@ private:
     };
 
     void RemoveDisconnectedSessions(void);
+    bool ShouldExtractKek(void) const;
     void DecremenetRemainingConnectionAttempts(void);
     bool HasNoRemainingConnectionAttempts(void) const;
     int  Transmit(const unsigned char    *aBuf,
@@ -877,11 +892,14 @@ private:
 
     static const int kCipherSuites[][2];
 
-    bool                            mLayerTwoSecurity : 1;
-    bool                            mDatagramTransport : 1;
-    bool                            mIsOpen : 1;
-    bool                            mIsClosing : 1;
-    bool                            mVerifyPeerCertificate : 1;
+    bool mLayerTwoSecurity : 1;
+    bool mDatagramTransport : 1;
+    bool mIsOpen : 1;
+    bool mIsClosing : 1;
+    bool mVerifyPeerCertificate : 1;
+#if OPENTHREAD_CONFIG_CCM_ENABLE
+    bool mExtractKek : 1;
+#endif
     CipherSuite                     mCipherSuite;
     uint8_t                         mPskLength;
     uint16_t                        mMaxConnectionAttempts;

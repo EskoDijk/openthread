@@ -665,6 +665,9 @@ SecureTransport::SecureTransport(Instance &aInstance, LinkSecurityMode aLayerTwo
     , mIsOpen(false)
     , mIsClosing(false)
     , mVerifyPeerCertificate(true)
+#if OPENTHREAD_CONFIG_CCM_ENABLE
+    , mExtractKek(false)
+#endif
     , mCipherSuite(kUnspecifiedCipherSuite)
     , mPskLength(0)
     , mMaxConnectionAttempts(0)
@@ -795,6 +798,9 @@ void SecureTransport::Close(void)
     mIsOpen    = false;
     mIsClosing = false;
     mTimer.Stop();
+#if OPENTHREAD_CONFIG_CCM_ENABLE
+    mExtractKek = false;
+#endif
 
 exit:
     return;
@@ -896,6 +902,21 @@ exit:
     return rval;
 }
 
+bool SecureTransport::ShouldExtractKek(void) const
+{
+    bool shouldExtract = (mCipherSuite == kEcjpakeWithAes128Ccm8);
+
+#if OPENTHREAD_CONFIG_CCM_ENABLE
+    // A CCM NKP session is certificate-based (LDevID) rather than
+    // ECJPAKE, but its KEK is still needed to secure the Joiner
+    // Entrust message. Such a user opts in explicitly.
+
+    shouldExtract = shouldExtract || mExtractKek;
+#endif
+
+    return shouldExtract;
+}
+
 #if OPENTHREAD_CONFIG_MBEDTLS_PROVIDES_SSL_KEY_EXPORT
 void SecureTransport::HandleMbedtlsExportKeys(void                       *aContext,
                                               mbedtls_ssl_key_export_type aType,
@@ -923,7 +944,7 @@ void SecureTransport::HandleMbedtlsExportKeys(mbedtls_ssl_key_export_type aType,
 
     mKeylogCallback.InvokeIfSet(aType, aMasterSecret, aMasterSecretLen, aClientRandom, aServerRandom, aTlsPrfType);
 
-    VerifyOrExit(mCipherSuite == kEcjpakeWithAes128Ccm8);
+    VerifyOrExit(ShouldExtractKek());
     VerifyOrExit(aType == MBEDTLS_SSL_KEY_EXPORT_TLS12_MASTER_SECRET);
 
     memcpy(randBytes, aServerRandom, kSecureTransportRandomBufferSize);
@@ -937,6 +958,7 @@ void SecureTransport::HandleMbedtlsExportKeys(mbedtls_ssl_key_export_type aType,
     sha256.Update(keyBlock, kSecureTransportKeyBlockSize);
     sha256.Finish(kek);
 
+    LogDebg("Generated KEK");
     mTimer.Get<KeyManager>().SetKek(kek.GetBytes());
 
 exit:
@@ -967,12 +989,13 @@ int SecureTransport::HandleMbedtlsExportKeys(const unsigned char *aMasterSecret,
     Crypto::Sha256::Hash kek;
     Crypto::Sha256       sha256;
 
-    VerifyOrExit(mCipherSuite == kEcjpakeWithAes128Ccm8);
+    VerifyOrExit(ShouldExtractKek());
 
     sha256.Start();
     sha256.Update(aKeyBlock, 2 * static_cast<uint16_t>(aMacLength + aKeyLength + aIvLength));
     sha256.Finish(kek);
 
+    LogDebg("Generated KEK");
     mTimer.Get<KeyManager>().SetKek(kek.GetBytes());
 
 exit:
