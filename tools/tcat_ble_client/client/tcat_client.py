@@ -33,9 +33,10 @@ from typing import Optional
 from bleak import BLEDevice
 
 from ble.ble_connection_constants import BBTC_SERVICE_UUID, BBTC_TX_CHAR_UUID, BBTC_RX_CHAR_UUID
-from ble.ble_stream import BleStream, BleConnectionClosed
+from ble.ble_stream import BleStream
 from ble.ble_stream_secure import BleStreamSecure, CloseReason
 from ble.udp_stream import UdpStream
+from client.transport import TransportClosed
 from tlv.tcat_tlv import TcatTLVType
 from tlv.tlv import TLV
 from utils import hexdump_ot
@@ -158,7 +159,7 @@ class TcatClient:
             raise TcatLinkClosed('TCAT Device not connected')
         try:
             return await session.send_with_resp(data)
-        except BleConnectionClosed as e:
+        except TransportClosed as e:
             raise TcatLinkClosed(str(e)) from e  # the session has closed itself, and was reported
 
     def _on_session_closed(self, session: BleStreamSecure, reason: CloseReason) -> None:

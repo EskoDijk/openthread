@@ -36,7 +36,7 @@ from typing import Optional, Callable
 from cryptography.x509 import load_der_x509_certificate
 from cryptography.hazmat.primitives.serialization import (Encoding, PublicFormat)
 
-from ble.ble_stream import BleConnectionClosed
+from client.transport import TransportClosed
 from tlv.tlv import TLV
 from tlv.tcat_tlv import TcatTLVType
 import utils
@@ -170,11 +170,11 @@ class BleStreamSecure:
             bytes: The received response data, or empty b'' if no response was received within the timeout.
 
         Raises:
-            BleConnectionClosed: If the session is closed, or gets closed while waiting for the response.
+            TransportClosed: If the session is closed, or gets closed while waiting for the response.
         """
         async with self._request_lock:
             if not self.is_connected:
-                raise BleConnectionClosed('TCAT session is closed')
+                raise TransportClosed('TCAT session is closed')
             response = asyncio.get_running_loop().create_future()
             self._pending_response = response
             try:
@@ -184,7 +184,7 @@ class BleStreamSecure:
             except TimeoutError:
                 logger.error(f'No response when response TLV/line expected (timeout={timeout}s).')
                 return b''
-            except BleConnectionClosed:
+            except TransportClosed:
                 response.cancel()  # no longer awaited
                 await self.close(CloseReason.LINK_LOST)  # no-op if the session is already closing
                 raise
@@ -235,7 +235,7 @@ class BleStreamSecure:
 
         finally:
             if self._pending_response is not None and not self._pending_response.done():
-                self._pending_response.set_exception(BleConnectionClosed('TCAT session was closed'))
+                self._pending_response.set_exception(TransportClosed('TCAT session was closed'))
             await self._stop_reader()
             self._peer_public_key = None
             self.peer_challenge = None
@@ -284,7 +284,7 @@ class BleStreamSecure:
                     self._deliver(record)
                 await self._flush()  # in case reading produced TLS output, e.g. a key update
 
-        except BleConnectionClosed as err:
+        except TransportClosed as err:
             logger.debug(f'Link closed: {err}')
             return CloseReason.LINK_LOST
         except ssl.SSLError as err:

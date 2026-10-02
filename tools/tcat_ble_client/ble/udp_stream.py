@@ -30,12 +30,13 @@ import asyncio
 import logging
 import socket
 
-from ble.ble_stream import BleConnectionClosed
+from client.transport import TransportClosed
 
 logger = logging.getLogger(__name__)
 
 
 class UdpStream:
+    """Simulated BLE transport (a client.transport.Transport) to a simulated TCAT device, over UDP."""
     BASE_PORT = 10000
     MAX_DATAGRAM_SIZE = 65535
 
@@ -48,22 +49,22 @@ class UdpStream:
     def __str__(self):
         return f"UdpStream[{self.address[0]}:{self.address[1]}]"
 
-    async def send(self, data):
+    async def send(self, data: bytes) -> None:
         logger.debug(f'tx {len(data)} bytes')
         if not self.__connected:
-            raise BleConnectionClosed('BLE connection (simulation) was closed')
-        return self.socket.sendto(data, self.address)
+            raise TransportClosed('BLE connection (simulation) was closed')
+        self.socket.sendto(data, self.address)
 
     async def recv(self) -> bytes:
-        """Waits until a datagram is received and returns it. Raises BleConnectionClosed when the link is closed."""
+        """Waits until a datagram is received and returns it. Raises TransportClosed when the link is closed."""
         if not self.__connected:
-            raise BleConnectionClosed('BLE connection (simulation) was closed')
+            raise TransportClosed('BLE connection (simulation) was closed')
         data = await asyncio.get_running_loop().sock_recv(self.socket, self.MAX_DATAGRAM_SIZE)
         # A received 0-byte datagram simulates the peer dropping the BLE link
         if len(data) == 0:
             logger.debug('rx: BLE link disconnection was simulated (0-byte UDP packet)')
             self.__connected = False
-            raise BleConnectionClosed('BLE connection (simulation) was closed')
+            raise TransportClosed('BLE connection (simulation) was closed')
         logger.debug(f'rx {len(data)} bytes')
         return data
 
@@ -73,10 +74,10 @@ class UdpStream:
         # perform a clean TLS shutdown.
         self.socket.sendto(b'', self.address)
 
-    async def disconnect(self):
+    async def disconnect(self) -> None:
         self.__connected = False
         self.socket.close()
 
     @property
-    def is_connected(self):
+    def is_connected(self) -> bool:
         return self.__connected

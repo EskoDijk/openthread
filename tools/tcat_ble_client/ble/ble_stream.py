@@ -35,14 +35,13 @@ from bleak import BleakClient
 from bleak.backends.device import BLEDevice
 from bleak.backends.characteristic import BleakGATTCharacteristic
 
+from client.transport import TransportClosed
+
 logger = logging.getLogger(__name__)
 
 
-class BleConnectionClosed(Exception):
-    pass
-
-
 class BleStream:
+    """BLE transport (a client.transport.Transport) to a TCAT device, using the TCAT GATT service."""
 
     def __init__(self, client, service_uuid, tx_char_uuid, rx_char_uuid):
         self.__receive_buffer = bytearray()
@@ -84,24 +83,23 @@ class BleStream:
         await client.start_notify(self.tx_char_uuid, self.__handle_rx)
         return self
 
-    async def send(self, data):
+    async def send(self, data: bytes) -> None:
         logger.debug(f'tx {len(data)} bytes')
         if not self.client.is_connected:
-            raise BleConnectionClosed('BLE connection was closed')
+            raise TransportClosed('BLE connection was closed')
         services = self.client.services.get_service(self.service_uuid)
         rx_char = services.get_characteristic(self.rx_char_uuid)
         for s in BleStream.__sliced(data, rx_char.max_write_without_response_size):
             await self.client.write_gatt_char(rx_char, s)
-        return len(data)
 
     async def recv(self) -> bytes:
         """
         Waits until data is received, then returns all data received so far.
-        Raises BleConnectionClosed when the link is closed and all received data was returned.
+        Raises TransportClosed when the link is closed and all received data was returned.
         """
         while not self.__receive_buffer:
             if not self.client.is_connected:
-                raise BleConnectionClosed('BLE connection was closed')
+                raise TransportClosed('BLE connection was closed')
             self.__rx_event.clear()
             await self.__rx_event.wait()
 
@@ -109,10 +107,10 @@ class BleStream:
         self.__receive_buffer.clear()
         return data
 
-    async def disconnect(self):
+    async def disconnect(self) -> None:
         if self.client.is_connected:
             await self.client.disconnect()
 
     @property
-    def is_connected(self):
+    def is_connected(self) -> bool:
         return self.client.is_connected or len(self.__receive_buffer) > 0
