@@ -53,6 +53,21 @@ class CloseReason(Enum):
     TLS_ERROR = auto()  # fatal TLS error, e.g. a fatal alert received from the peer
     HANDSHAKE_FAILED = auto()  # TLS handshake did not succeed
 
+    @property
+    def description(self) -> str:
+        """Human-readable description of the close reason."""
+        return _CLOSE_REASON_DESCRIPTIONS[self]
+
+
+_CLOSE_REASON_DESCRIPTIONS = {
+    CloseReason.LOCAL: 'closed by local request',
+    CloseReason.LOCAL_ABORT: 'aborted by local request',
+    CloseReason.PEER_CLOSED: 'closed by the TCAT Device',
+    CloseReason.LINK_LOST: 'link lost or closed unexpectedly',
+    CloseReason.TLS_ERROR: 'TLS error',
+    CloseReason.HANDSHAKE_FAILED: 'TLS handshake failed',
+}
+
 
 class TcatLinkClosed(Exception):
     """
@@ -220,7 +235,7 @@ class TcatLinkSecure:
         graceful = reason == CloseReason.LOCAL and self.is_connected
         self._closing = True
         self.close_reason = reason
-        logger.debug(f'Closing TCAT link: {reason.name}')
+        logger.debug(f'Closing TCAT link: {reason.name} ({reason.description})')
 
         try:
             if graceful:

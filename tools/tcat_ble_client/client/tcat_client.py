@@ -143,12 +143,9 @@ class TcatClient:
         # Called exactly once per link, by TcatLinkSecure.close().
         if self._link is link:
             self._link = None
-        if reason == CloseReason.PEER_CLOSED:
-            print('TCAT Device closed the connection.')
-        elif reason == CloseReason.LINK_LOST:
-            print('TCAT Device disconnected: the connection was closed unexpectedly.')
-        elif reason == CloseReason.TLS_ERROR:
-            print('TCAT Device disconnected: TLS error.')
+        # Local closes are reported by their initiator, and handshake failures are logged.
+        if reason in (CloseReason.PEER_CLOSED, CloseReason.LINK_LOST, CloseReason.TLS_ERROR):
+            print(f'TCAT Device disconnected: {reason.description}.')
 
 
 def _handle_unsolicited_event(data: bytes) -> None:
