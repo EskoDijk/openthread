@@ -26,11 +26,9 @@
   POSSIBILITY OF SUCH DAMAGE.
 """
 
-from argparse import Namespace
 import logging
 import readline
 import shlex
-from typing import Optional
 
 from cli.base_commands import (DisconnectCommand, HelpCommand, HelloCommand, CommissionCommand, DecommissionCommand,
                                ExtractDatasetCommand, GetCommissionerCertificate, GetDeviceIdCommand,
@@ -38,7 +36,8 @@ from cli.base_commands import (DisconnectCommand, HelpCommand, HelloCommand, Com
                                GetRandomNumberChallenge, ThreadStateCommand, ScanCommand, PresentHash,
                                DiagnosticTlvsCommand, GetApplicationLayersCommand, SendVendorData,
                                SendApplicationData1, SendApplicationData2, SendApplicationData3, SendApplicationData4,
-                               SimulationCommand, SimulationBleDisconnectCommand, connect_helper, disconnect_helper)
+                               SimulationCommand, SimulationBleDisconnectCommand)
+from client.tcat_client import TcatClient
 from .command import CommandResultNone, CommandResult
 from .tlv_commands import TlvCommand
 from cli.dataset_commands import (DatasetCommand)
@@ -49,7 +48,7 @@ logger = logging.getLogger(__name__)
 
 class CLI:
 
-    def __init__(self, dataset: ThreadDataset, cmd_args: Optional[Namespace] = None):
+    def __init__(self, dataset: ThreadDataset, client: TcatClient):
         self._commands = {
             'help': HelpCommand(),
             'hello': HelloCommand(),
@@ -80,10 +79,9 @@ class CLI:
             'diagnostic_tlvs': DiagnosticTlvsCommand()
         }
         self.context = {
-            'ble_sstream': None,  # BleStreamSecure | None (owns the underlying BleStream/UdpStream)
+            'client': client,
             'dataset': dataset,
             'commands': self._commands,
-            'cmd_args': cmd_args
         }
         readline.set_completer(self.completer)
         readline.parse_and_bind('tab: complete')
@@ -133,15 +131,3 @@ class CLI:
             raise Exception('Invalid command: {}'.format(command))
 
         return await self._commands[command].execute(args, self.context)
-
-    async def connect(self, device) -> bool:
-        """
-        Connect with TLS to the BLE/simulation device.
-        :param device: the BLE device object or simulation UdpStream object
-        :return: True if connection was successful, False otherwise
-        """
-        return await connect_helper(device, self.context)
-
-    async def disconnect(self):
-        """ Disconnect from the BLE/simulation device. """
-        await disconnect_helper(self.context)

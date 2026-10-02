@@ -30,17 +30,11 @@ from abc import abstractmethod
 import asyncio
 from hashlib import sha256
 import hmac
-import logging
-from os import path
 from secrets import token_bytes
 
-from bleak import BLEDevice
-
-from ble.ble_connection_constants import BBTC_SERVICE_UUID, BBTC_TX_CHAR_UUID, BBTC_RX_CHAR_UUID
-from ble.ble_stream import BleStream
-from ble.ble_stream_secure import BleStreamSecure, CloseReason
 from ble import ble_scanner
 from ble.udp_stream import UdpStream
+from client.tcat_client import TcatClient
 from cli.command import Command, CommandResultNone, CommandResultTLV, CommandResult, CommandResultError
 from dataset.dataset import ThreadDataset
 from tlv.tlv import TLV
@@ -49,8 +43,6 @@ from tlv.tcat_tlv import TcatTLVType
 from utils import select_device_by_user_input
 
 CHALLENGE_SIZE = 8
-
-logger = logging.getLogger(__name__)
 
 
 class HelpCommand(Command):
@@ -81,14 +73,14 @@ class BleCommand(Command):
         pass
 
     async def execute_default(self, args, context) -> CommandResult:
-        if context['ble_sstream'] is None or not context['ble_sstream'].is_connected:
+        client: TcatClient = context['client']
+        if not client.is_connected:
             return CommandResultError("TCAT Device not connected.")
-        bless: BleStreamSecure = context['ble_sstream']
 
         print(self.get_log_string())
         try:
             data = self.prepare_data(args, context)
-            response = await bless.send_with_resp(data)
+            response = await client.send_with_resp(data)
             if not response:
                 return CommandResultNone()
             tlv_response = TLV.from_bytes(response)
@@ -240,7 +232,7 @@ class DisconnectCommand(Command):
         return 'Disconnect client from TCAT device'
 
     async def execute_default(self, args, context) -> CommandResult:
-        await disconnect_helper(context)
+        await context['client'].disconnect()
         return CommandResultNone()
 
 
@@ -250,7 +242,8 @@ class SimulationBleDisconnectCommand(Command):
         return 'Simulate a BLE link break to a simulated TCAT device (no Disconnect TLV, no TLS shutdown).'
 
     async def execute_default(self, args, context) -> CommandResult:
-        bless: BleStreamSecure = context['ble_sstream']
+        client: TcatClient = context['client']
+        bless = client.session
         if bless is None or not isinstance(bless.stream, UdpStream):
             return CommandResultError('only available for a simulation connection (use \'simulation <id>\' first).')
 
@@ -258,7 +251,7 @@ class SimulationBleDisconnectCommand(Command):
         # Signal the abrupt link break to the device, then close the session without a TLS
         # shutdown (no close-notify), mirroring a real abrupt disconnect on the client side too.
         await bless.stream.simulation_ble_disconnect()
-        await bless.close(CloseReason.LOCAL_ABORT)
+        await client.abort()
         print('Done')
         return CommandResultNone()
 
@@ -355,8 +348,8 @@ class GetRandomNumberChallenge(BleCommand):
         return TLV(TcatTLVType.GET_RANDOM_NUMBER_CHALLENGE.value, bytes()).to_bytes()
 
     def process_response(self, tlv_response, context) -> None:
-        bless: BleStreamSecure = context['ble_sstream']
-        if tlv_response.value is not None:
+        bless = context['client'].session
+        if bless is not None and tlv_response.value is not None:
             if len(tlv_response.value) == CHALLENGE_SIZE:
                 bless.peer_challenge = tlv_response.value
             else:
@@ -369,8 +362,8 @@ class PingCommand(Command):
         return 'Send echo request to TCAT device.'
 
     async def execute_default(self, args, context) -> CommandResult:
-        bless: BleStreamSecure = context['ble_sstream']
-        if bless is None or not bless.is_connected:
+        client: TcatClient = context['client']
+        if not client.is_connected:
             return CommandResultError("TCAT Device not connected.")
         payload_size = 10
         max_payload = 512
@@ -381,7 +374,7 @@ class PingCommand(Command):
         to_send = token_bytes(payload_size)
         data = TLV(TcatTLVType.PING.value, to_send).to_bytes()
         start_time = asyncio.get_running_loop().time()
-        response = await bless.send_with_resp(data)
+        response = await client.send_with_resp(data)
         elapsed_time = 1e3 * (asyncio.get_running_loop().time() - start_time)
         if not response:
             return CommandResultNone()
@@ -418,8 +411,8 @@ class PresentHash(BleCommand):
             tlv_type = TcatTLVType.PRESENT_INSTALL_CODE_HASH.value
         else:
             raise DataNotPrepared("Hash code name incorrect.")
-        bless: BleStreamSecure = context['ble_sstream']
-        if bless.peer_public_key is None:
+        bless = context['client'].session
+        if bless is None or bless.peer_public_key is None:
             raise DataNotPrepared("Peer certificate not present.")
 
         if bless.peer_challenge is None:
@@ -433,127 +426,20 @@ class PresentHash(BleCommand):
         return data
 
 
-def _handshake_progress_bar(is_concluded: bool):
-    if is_concluded:
-        print('')
-    else:
-        print('.', end='', flush=True)
-
-
-async def connect_helper(device: BLEDevice | UdpStream,
-                         context: dict,
-                         timeout_ble=30.0,
-                         timeout_simulation=5.0) -> bool:
-    """Helper function for CLI and commands to establish a new secure connection with a TCAT device.
-
-    Handles both BLE and simulated UDP connections. Loads certificates and performs handshake
-    to establish a secure channel. Connection objects are stored in the context dictionary.
-
-    Args:
-        device: BLEDevice object, or UdpStream (for simulation)
-        context: Dictionary containing application context including command line arguments
-        timeout_ble: Timeout in seconds for handshake with real TCAT device (default: 30.0)
-        timeout_simulation: Timeout in seconds for handshake for simulated TCAT device (default: 5.0)
-
-    Returns:
-        True if connection was successful, False otherwise.
-
-    Raises:
-        Exception: If certificates cannot be loaded
-    """
-    is_simulation = isinstance(device, UdpStream)
-    is_debug = logger.getEffectiveLevel() <= logging.DEBUG
-
-    await disconnect_helper(context)  # close any previous session first
-
-    print(f'Connecting to {device}')
-    if not is_simulation:
-        ble_stream = await BleStream.create(device.address, BBTC_SERVICE_UUID, BBTC_TX_CHAR_UUID, BBTC_RX_CHAR_UUID)
-    else:
-        ble_stream = device
-    ble_sstream = BleStreamSecure(ble_stream)
-    ble_sstream.on_closed = lambda reason: _on_session_closed(context, ble_sstream, reason)
-
-    cert_path = context['cmd_args'].cert_path if context['cmd_args'] else 'auth'
-    ble_sstream.load_cert(
-        certfile=path.join(cert_path, 'commissioner_cert.pem'),
-        keyfile=path.join(cert_path, 'commissioner_key.pem'),
-        cafile=path.join(cert_path, 'ca_cert.pem'),
-    )
-    logger.info(f"Certificates and key loaded from '{cert_path}'")
-
-    print('Setting up secure channel...')
-    ok = False
-    try:
-        cb = None
-        if not is_debug:
-            cb = _handshake_progress_bar
-        ok = await ble_sstream.do_handshake(progress_callback=cb,
-                                            timeout=timeout_simulation if is_simulation else timeout_ble)
-    except Exception as e:
-        logger.error(e)
-
-    if ok:
-        # Publish the session only now: the receive loop treats a published, not-connected session as ended.
-        context['ble_sstream'] = ble_sstream
-        print('Done')
-        return True
-    else:
-        await ble_sstream.close(CloseReason.HANDSHAKE_FAILED)
-        return False
-
-
-async def disconnect_helper(context: dict) -> None:
-    """Helper function for CLI and commands to disconnect from a TCAT device, by local request."""
-    bless: BleStreamSecure = context['ble_sstream']
-    if bless is None:
-        return
-    if not bless.is_connected:
-        # Already lost or closing; teardown (if not done yet) happens without over-the-link traffic.
-        await bless.close(CloseReason.LOCAL_ABORT)
-        return
-
-    print('Disconnecting...')
-    await bless.close(CloseReason.LOCAL)
-    print('Done')
-
-
-async def connection_ended_helper(context: dict) -> None:
-    """Helper function to tear down a TCAT session that ended without a local request.
-
-    The session ended either because the peer closed TLS (close-notify), or the BLE link was lost.
-    No Disconnect TLV and no TLS close-notify is sent by this helper.
-    """
-    bless: BleStreamSecure = context['ble_sstream']
-    if bless is None:
-        return
-    await bless.close(CloseReason.PEER_CLOSED if bless.close_notify_received else CloseReason.LINK_LOST)
-
-
-def _on_session_closed(context: dict, bless: BleStreamSecure, reason: CloseReason) -> None:
-    """Called exactly once when a TCAT session is fully closed, for any reason."""
-    if context['ble_sstream'] is bless:
-        context['ble_sstream'] = None
-    if reason == CloseReason.PEER_CLOSED:
-        print('TCAT Device closed the connection.')
-    elif reason == CloseReason.LINK_LOST:
-        print('TCAT Device disconnected: the BLE connection was closed unexpectedly.')
-
-
 class ScanCommand(Command):
 
     def get_help_string(self) -> str:
         return 'Perform scan for TCAT devices.'
 
     async def execute_default(self, args, context) -> CommandResult:
-        if context['ble_sstream'] is not None and context['ble_sstream'].is_connected:
+        if context['client'].is_connected:
             return CommandResultError('already connected to a TCAT device. Use \'disconnect\' first.')
 
         print('Scanning for BLE TCAT devices...')
         tcat_devices = await ble_scanner.scan_tcat_devices()
         device = select_device_by_user_input(tcat_devices)
         if device is not None:
-            await connect_helper(device, context)
+            await context['client'].connect(device)
 
         return CommandResultNone()
 
@@ -566,11 +452,11 @@ class SimulationCommand(Command):
     async def execute_default(self, args, context) -> CommandResult:
         if len(args) != 1:
             return CommandResultError('need index number of simulated TCAT device as first argument.')
-        if context['ble_sstream'] is not None and context['ble_sstream'].is_connected:
+        if context['client'].is_connected:
             return CommandResultError('already connected to a TCAT device. Use \'disconnect\' first.')
 
         device = UdpStream("127.0.0.1", int(args[0]))
-        await connect_helper(device, context)
+        await context['client'].connect(device)
         return CommandResultNone()
 
 

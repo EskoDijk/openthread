@@ -368,6 +368,7 @@ class BleStreamSecure:
                             self.incoming.write(recv_data)
                         else:
                             await asyncio.sleep(0.020)  # small pause to allow asyncio.timeout to occur
+
                     except ssl.SSLWantWriteError:
                         send_data = self.outgoing.read()
                         if send_data:

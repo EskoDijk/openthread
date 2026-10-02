@@ -32,20 +32,16 @@ import logging
 
 from bleak import BLEDevice
 
-from ble.ble_stream import BleConnectionClosed
-from ble.ble_stream_secure import BleStreamSecure
 from ble.udp_stream import UdpStream
 from ble import ble_scanner
 from cli.cli import CLI
-from cli.base_commands import connection_ended_helper
+from client.tcat_client import TcatClient, TcatLinkClosed
 from dataset.dataset import ThreadDataset
 from cli.command import CommandResult
-from tlv.tcat_tlv import TcatTLVType
-from tlv.tlv import TLV
-from utils import hexdump_ot, select_device_by_user_input, quit_with_reason
+from utils import select_device_by_user_input, quit_with_reason
 
 logger = logging.getLogger(__name__)
-logged_modules = ['ble', 'cli', 'dataset', 'tlv', 'utils']
+logged_modules = ['ble', 'cli', 'client', 'dataset', 'tlv', 'utils']
 
 
 async def main():
@@ -74,17 +70,14 @@ async def main():
 
     device = await get_device_by_args(args)
 
-    # create CLI and (if selected) connect to TCAT device
-    ds = ThreadDataset()
-    cli = CLI(ds, args)
+    # create client and CLI, and (if selected) connect to TCAT device
+    client = TcatClient(cert_path=args.cert_path)
+    cli = CLI(ThreadDataset(), client)
     if device is not None:
-        if not await cli.connect(device):
+        if not await client.connect(device):
             quit_with_reason('Failed to connect to TCAT device: TLS handshake failed.')
 
-    # Task 1: run a receiver that gets unsolicited event data or TLS Alerts from TLS server.
-    receiver_task = asyncio.create_task(receive_loop(cli.context))
-
-    # Task 2: run the CLI
+    # run the CLI
     print('Enter \'help\' to see available commands or \'exit\' to exit the application.')
     loop = asyncio.get_running_loop()
     while True:
@@ -94,60 +87,14 @@ async def main():
         try:
             result: CommandResult = await cli.evaluate_input(user_input)
             result.pretty_print()
-        except BleConnectionClosed:
-            await connection_ended_helper(cli.context)
+        except TcatLinkClosed as e:
+            logger.debug(f'Command ended: {e}')  # session closure already reported by the client
         except Exception as e:
             logger.error(e)
             logger.debug(e, exc_info=True)
 
-    # Stop Task 1
-    receiver_task.cancel()
-    try:
-        await receiver_task
-    except asyncio.CancelledError:
-        # CancelledError is expected when awaiting the canceled task - not an error.
-        pass
-
-    # Disconnect from TCAT device (if still needed)
-    await cli.disconnect()
-
-
-async def receive_loop(cli_context: dict):
-    while True:
-        bless: BleStreamSecure = cli_context['ble_sstream']
-        if bless is not None:
-            try:
-                data = await bless.recv_unsolicited_event()
-            except BleConnectionClosed:
-                await connection_ended_helper(cli_context)
-                continue
-
-            if data:
-                logger.info('Received event data from TCAT Device:\n' + hexdump_ot("Event", data))
-                tlv = TLV.from_bytes(data)
-                validate_unsolicited_tlv(tlv)
-                continue
-
-            # The connection can also end without BleConnectionClosed being raised: either the peer
-            # closed TLS gracefully (close-notify), or the BLE link itself dropped.
-            if not bless.is_connected:
-                await connection_ended_helper(cli_context)
-                continue
-
-        await asyncio.sleep(0.100)
-
-
-def validate_unsolicited_tlv(tlv: TLV):
-    if tlv.type in [
-            TcatTLVType.APPLICATION_DATA_1.value, TcatTLVType.APPLICATION_DATA_2.value,
-            TcatTLVType.APPLICATION_DATA_3.value, TcatTLVType.APPLICATION_DATA_4.value
-    ]:
-        num = tlv.type - TcatTLVType.APPLICATION_DATA_1.value + 1
-        logger.info(f"  - Send Application Data {num} {hex(tlv.type)}")
-    elif tlv.type in [TcatTLVType.RESPONSE_EVENT.value]:
-        logger.info(f"  - Response Event {hex(tlv.type)}")
-    else:
-        logger.error(f"Error: Illegal unsolicited TLV type sent by TCAT Device: {hex(tlv.type)}")
+    # Disconnect from TCAT device (if needed)
+    await client.disconnect()
 
 
 async def get_device_by_args(args) -> BLEDevice | UdpStream | None:
@@ -163,13 +110,6 @@ async def get_device_by_args(args) -> BLEDevice | UdpStream | None:
         device = UdpStream("127.0.0.1", int(args.simulation))
 
     return device
-
-
-def handshake_progress_bar(is_concluded: bool):
-    if is_concluded:
-        print('')
-    else:
-        print('.', end='', flush=True)
 
 
 if __name__ == '__main__':
