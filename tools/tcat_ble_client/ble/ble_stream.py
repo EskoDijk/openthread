@@ -45,8 +45,8 @@ class BleConnectionClosed(Exception):
 class BleStream:
 
     def __init__(self, client, service_uuid, tx_char_uuid, rx_char_uuid):
-        self.__receive_buffer = b''
-        self.__last_recv_time = None
+        self.__receive_buffer = bytearray()
+        self.__rx_event = asyncio.Event()  # set on received data, or on disconnection
         self.client = client
         self.service_uuid = service_uuid
         self.tx_char_uuid = tx_char_uuid
@@ -65,7 +65,11 @@ class BleStream:
     def __handle_rx(self, _: BleakGATTCharacteristic, data: bytearray):
         logger.debug(f'rx {len(data)} bytes')
         self.__receive_buffer += data
-        self.__last_recv_time = asyncio.get_running_loop().time()
+        self.__rx_event.set()
+
+    def __handle_disconnected(self, _: BleakClient):
+        logger.debug('BLE link disconnected')
+        self.__rx_event.set()
 
     @staticmethod
     def __sliced(data: bytes, n: int) -> Iterator[bytes]:
@@ -73,9 +77,10 @@ class BleStream:
 
     @classmethod
     async def create(cls, address_or_ble_device: Union[BLEDevice, str], service_uuid, tx_char_uuid, rx_char_uuid):
-        client = BleakClient(address_or_ble_device)
+        self = cls(None, service_uuid, tx_char_uuid, rx_char_uuid)
+        client = BleakClient(address_or_ble_device, disconnected_callback=self.__handle_disconnected)
+        self.client = client
         await client.connect()
-        self = cls(client, service_uuid, tx_char_uuid, rx_char_uuid)
         await client.start_notify(self.tx_char_uuid, self.__handle_rx)
         return self
 
@@ -89,19 +94,19 @@ class BleStream:
             await self.client.write_gatt_char(rx_char, s)
         return len(data)
 
-    async def recv(self, bufsize, recv_timeout=0.200):
-        # check to drain bytes already received before reporting the closed connection
-        if not self.__receive_buffer:
+    async def recv(self) -> bytes:
+        """
+        Waits until data is received, then returns all data received so far.
+        Raises BleConnectionClosed when the link is closed and all received data was returned.
+        """
+        while not self.__receive_buffer:
             if not self.client.is_connected:
                 raise BleConnectionClosed('BLE connection was closed')
-            return b''
+            self.__rx_event.clear()
+            await self.__rx_event.wait()
 
-        while asyncio.get_running_loop().time() - self.__last_recv_time <= recv_timeout:
-            await asyncio.sleep(0.020)
-
-        data = self.__receive_buffer[:bufsize]
-        self.__receive_buffer = self.__receive_buffer[bufsize:]
-        logger.debug(f'rx {len(data)} bytes')
+        data = bytes(self.__receive_buffer)
+        self.__receive_buffer.clear()
         return data
 
     async def disconnect(self):

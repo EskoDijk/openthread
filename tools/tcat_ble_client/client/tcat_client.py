@@ -26,7 +26,6 @@
   POSSIBILITY OF SUCH DAMAGE.
 """
 
-import asyncio
 import logging
 from os import path
 from typing import Optional
@@ -56,17 +55,15 @@ class TcatClient:
     """
     TCAT Commissioner client: owns the session (TLS over BLE, or over UDP for simulation) with a TCAT Device.
 
-    There is at most one session at a time. While a session is open, a receive task handles unsolicited
-    events from the TCAT Device and detects the end of the session (peer close or BLE link loss). All ways
-    of ending a session go through BleStreamSecure.close(), which reports the end once via _on_session_closed().
+    There is at most one session at a time. The session itself receives unsolicited events from the TCAT
+    Device (reported via _handle_unsolicited_event()) and detects the end of the session (peer close, or BLE
+    link loss). All ways of ending a session go through BleStreamSecure.close(), which reports the end once
+    via _on_session_closed().
     """
-
-    RECEIVE_POLL_INTERVAL = 0.100
 
     def __init__(self, cert_path: str = 'auth'):
         self._cert_path = cert_path
         self._session: Optional[BleStreamSecure] = None
-        self._receive_task: Optional[asyncio.Task] = None
 
     @property
     def session(self) -> Optional[BleStreamSecure]:
@@ -101,6 +98,7 @@ class TcatClient:
         else:
             stream = await BleStream.create(device.address, BBTC_SERVICE_UUID, BBTC_TX_CHAR_UUID, BBTC_RX_CHAR_UUID)
         session = BleStreamSecure(stream)
+        session.on_event = _handle_unsolicited_event
         session.on_closed = lambda reason: self._on_session_closed(session, reason)
 
         ok = False
@@ -124,7 +122,6 @@ class TcatClient:
 
         if ok:
             self._session = session
-            self._receive_task = asyncio.create_task(self._receive_loop(session))
             print('Done')
         return ok
 
@@ -140,13 +137,11 @@ class TcatClient:
         else:
             # Session already ended: tear down (if not done yet) without any over-the-link traffic.
             await session.close(CloseReason.LOCAL_ABORT)
-        await self._wait_receive_task()
 
     async def abort(self) -> None:
         """Closes the current session, if any, abruptly: no Disconnect TLV and no TLS close-notify."""
         if self._session is not None:
             await self._session.close(CloseReason.LOCAL_ABORT)
-        await self._wait_receive_task()
 
     async def send_with_resp(self, data: bytes) -> bytes:
         """
@@ -164,17 +159,7 @@ class TcatClient:
         try:
             return await session.send_with_resp(data)
         except BleConnectionClosed as e:
-            await self._close_ended_session(session)
-            raise TcatLinkClosed(str(e)) from e
-
-    async def _wait_receive_task(self) -> None:
-        task, self._receive_task = self._receive_task, None
-        if task is not None:
-            await task  # ends by itself once the session is closed
-
-    @staticmethod
-    async def _close_ended_session(session: BleStreamSecure) -> None:
-        await session.close(CloseReason.PEER_CLOSED if session.close_notify_received else CloseReason.LINK_LOST)
+            raise TcatLinkClosed(str(e)) from e  # the session has closed itself, and was reported
 
     def _on_session_closed(self, session: BleStreamSecure, reason: CloseReason) -> None:
         # Called exactly once per session, by BleStreamSecure.close().
@@ -184,27 +169,8 @@ class TcatClient:
             print('TCAT Device closed the connection.')
         elif reason == CloseReason.LINK_LOST:
             print('TCAT Device disconnected: the BLE connection was closed unexpectedly.')
-
-    async def _receive_loop(self, session: BleStreamSecure) -> None:
-        """Receives unsolicited events (or TLS Alerts) from the TCAT Device until the session ends."""
-        try:
-            while True:
-                data = await session.recv_unsolicited_event()
-                if data:
-                    _handle_unsolicited_event(data)
-                    continue
-                # The session can end without BleConnectionClosed being raised: either the peer
-                # closed TLS (close-notify), or the BLE link dropped, or it was closed locally.
-                if not session.is_connected:
-                    break
-                await asyncio.sleep(self.RECEIVE_POLL_INTERVAL)
-        except BleConnectionClosed:
-            pass
-        except Exception as e:
-            logger.error(f'Receiving from TCAT Device failed: {e}')
-            logger.debug(e, exc_info=True)
-
-        await self._close_ended_session(session)  # no-op if already closed or closing
+        elif reason == CloseReason.TLS_ERROR:
+            print('TCAT Device disconnected: TLS error.')
 
 
 def _handle_unsolicited_event(data: bytes) -> None:
