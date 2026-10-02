@@ -38,7 +38,7 @@ from bleak import BLEDevice
 
 from ble.ble_connection_constants import BBTC_SERVICE_UUID, BBTC_TX_CHAR_UUID, BBTC_RX_CHAR_UUID
 from ble.ble_stream import BleStream
-from ble.ble_stream_secure import BleStreamSecure
+from ble.ble_stream_secure import BleStreamSecure, CloseReason
 from ble import ble_scanner
 from ble.udp_stream import UdpStream
 from cli.command import Command, CommandResultNone, CommandResultTLV, CommandResult, CommandResultError
@@ -250,17 +250,15 @@ class SimulationBleDisconnectCommand(Command):
         return 'Simulate a BLE link break to a simulated TCAT device (no Disconnect TLV, no TLS shutdown).'
 
     async def execute_default(self, args, context) -> CommandResult:
-        ble_stream = context['ble_stream']
-        if not isinstance(ble_stream, UdpStream):
+        bless: BleStreamSecure = context['ble_sstream']
+        if bless is None or not isinstance(bless.stream, UdpStream):
             return CommandResultError('only available for a simulation connection (use \'simulation <id>\' first).')
 
         print('Disconnecting simulated BLE link...')
-        # Signal the abrupt link break to the device, then drop local stream state without a TLS
+        # Signal the abrupt link break to the device, then close the session without a TLS
         # shutdown (no close-notify), mirroring a real abrupt disconnect on the client side too.
-        await ble_stream.simulation_ble_disconnect()
-        await ble_stream.disconnect()
-        context['ble_stream'] = None
-        context['ble_sstream'] = None
+        await bless.stream.simulation_ble_disconnect()
+        await bless.close(CloseReason.LOCAL_ABORT)
         print('Done')
         return CommandResultNone()
 
@@ -466,14 +464,15 @@ async def connect_helper(device: BLEDevice | UdpStream,
     is_simulation = isinstance(device, UdpStream)
     is_debug = logger.getEffectiveLevel() <= logging.DEBUG
 
+    await disconnect_helper(context)  # close any previous session first
+
     print(f'Connecting to {device}')
     if not is_simulation:
         ble_stream = await BleStream.create(device.address, BBTC_SERVICE_UUID, BBTC_TX_CHAR_UUID, BBTC_RX_CHAR_UUID)
     else:
         ble_stream = device
     ble_sstream = BleStreamSecure(ble_stream)
-    context['ble_sstream'] = ble_sstream
-    context['ble_stream'] = ble_stream
+    ble_sstream.on_closed = lambda reason: _on_session_closed(context, ble_sstream, reason)
 
     cert_path = context['cmd_args'].cert_path if context['cmd_args'] else 'auth'
     ble_sstream.load_cert(
@@ -495,58 +494,50 @@ async def connect_helper(device: BLEDevice | UdpStream,
         logger.error(e)
 
     if ok:
+        # Publish the session only now: the receive loop treats a published, not-connected session as ended.
+        context['ble_sstream'] = ble_sstream
         print('Done')
         return True
     else:
-        if ble_stream is not None:
-            await ble_stream.disconnect()
-        context['ble_stream'] = None
-        context['ble_sstream'] = None
+        await ble_sstream.close(CloseReason.HANDSHAKE_FAILED)
         return False
 
 
 async def disconnect_helper(context: dict) -> None:
-    """Helper function for CLI and commands to disconnect from a TCAT device."""
+    """Helper function for CLI and commands to disconnect from a TCAT device, by local request."""
     bless: BleStreamSecure = context['ble_sstream']
-    doing_disconn = False
-    if bless is not None and bless.is_connected:
-        print('Disconnecting...')
-        doing_disconn = True
-        logger.debug('Closing TLS connection.')
-        await bless.close(timeout=5.0)
-    context['ble_sstream'] = None
+    if bless is None:
+        return
+    if not bless.is_connected:
+        # Already lost or closing; teardown (if not done yet) happens without over-the-link traffic.
+        await bless.close(CloseReason.LOCAL_ABORT)
+        return
 
-    bles = context['ble_stream']
-    if bles is not None:
-        logger.debug('Closing BLE connection.')
-        doing_disconn = True
-        await bles.disconnect()
-    context['ble_stream'] = None
-    if doing_disconn:
-        print('Done')
+    print('Disconnecting...')
+    await bless.close(CloseReason.LOCAL)
+    print('Done')
 
 
-async def connection_closed_helper(context: dict) -> bool:
-    """Formally tear down a TCAT link that was lost unexpectedly (e.g. the peer dropped BLE).
+async def connection_ended_helper(context: dict) -> None:
+    """Helper function to tear down a TCAT session that ended without a local request.
 
-    Unlike `disconnect_helper`, this sends no Disconnect TLV and performs no TLS close-notify,
-    because the link is already gone. Returns True if a connection was actually torn down.
+    The session ended either because the peer closed TLS (close-notify), or the BLE link was lost.
+    No Disconnect TLV and no TLS close-notify is sent by this helper.
     """
-    if context['ble_sstream'] is None and context['ble_stream'] is None:
-        return False  # nothing to tear down (already disconnected)
+    bless: BleStreamSecure = context['ble_sstream']
+    if bless is None:
+        return
+    await bless.close(CloseReason.PEER_CLOSED if bless.close_notify_received else CloseReason.LINK_LOST)
 
-    print('TCAT Device disconnected: the BLE connection was closed unexpectedly.')
 
-    # Clear references first so this stays correct if both the receive loop and a command
-    # detect the closed link concurrently, then drop the (already dead) link without any
-    # over-the-link traffic.
-    bles = context['ble_stream']
-    context['ble_sstream'] = None
-    context['ble_stream'] = None
-    if bles is not None:
-        logger.debug('Closing BLE connection.')
-        await bles.disconnect()
-    return True
+def _on_session_closed(context: dict, bless: BleStreamSecure, reason: CloseReason) -> None:
+    """Called exactly once when a TCAT session is fully closed, for any reason."""
+    if context['ble_sstream'] is bless:
+        context['ble_sstream'] = None
+    if reason == CloseReason.PEER_CLOSED:
+        print('TCAT Device closed the connection.')
+    elif reason == CloseReason.LINK_LOST:
+        print('TCAT Device disconnected: the BLE connection was closed unexpectedly.')
 
 
 class ScanCommand(Command):

@@ -30,6 +30,7 @@ import _ssl
 import asyncio
 import logging
 import ssl
+from enum import Enum, auto
 from typing import Optional, Callable
 
 from cryptography.x509 import load_der_x509_certificate
@@ -40,6 +41,15 @@ from tlv.tcat_tlv import TcatTLVType
 import utils
 
 logger = logging.getLogger(__name__)
+
+
+class CloseReason(Enum):
+    """Reason why a TCAT session (TLS session and underlying BLE link) was closed."""
+    LOCAL = auto()  # closed by local request: graceful, with Disconnect TLV and TLS close-notify
+    LOCAL_ABORT = auto()  # closed by local request: abrupt, no over-the-link traffic
+    PEER_CLOSED = auto()  # peer closed the TLS session (close-notify received)
+    LINK_LOST = auto()  # underlying BLE link was lost
+    HANDSHAKE_FAILED = auto()  # TLS handshake did not succeed
 
 
 class BleStreamSecure:
@@ -57,6 +67,11 @@ class BleStreamSecure:
         self._close_notify_sent = False
         self._close_notify_received = False
         self._async_events_queue = asyncio.Queue()
+        self._closing = False
+        self._closed = asyncio.Event()
+        self.close_reason: Optional[CloseReason] = None
+        # Called exactly once, with the CloseReason, when the session is fully closed.
+        self.on_closed: Optional[Callable[[CloseReason], None]] = None
 
     def load_cert(self, certfile='', keyfile='', cafile=''):
         if certfile and keyfile:
@@ -278,9 +293,31 @@ class BleStreamSecure:
         except asyncio.QueueEmpty:
             return b''
 
-    async def close(self, timeout: float = 5.0):
+    async def close(self, reason: CloseReason = CloseReason.LOCAL, timeout: float = 5.0) -> None:
+        """
+        Closes the TCAT session: the TLS session and the underlying BLE link.
+
+        This is the single teardown path for all cases (local request, peer close, link loss,
+        handshake failure). It is idempotent: only the first call performs the teardown and
+        determines the close reason; any later or concurrent calls just wait for it to complete.
+
+        Args:
+            reason: Why the session is closed. Only CloseReason.LOCAL performs a graceful close
+                    (Disconnect TLV and TLS close-notify); the other reasons drop the link directly.
+            timeout: The maximum time in seconds for the graceful TLS close.
+        """
+        if self._closing:
+            await self._closed.wait()
+            return
+
+        # Determine and record this before any await, so concurrent callers see the session as closing.
+        graceful = reason == CloseReason.LOCAL and self.is_connected
+        self._closing = True
+        self.close_reason = reason
+        logger.debug(f'Closing TCAT session: {reason.name}')
+
         try:
-            if self.is_connected:
+            if graceful:
                 logger.debug('sending Disconnect command TLV')
                 data = TLV(TcatTLVType.DISCONNECT.value, bytes()).to_bytes()
                 try:
@@ -291,16 +328,27 @@ class BleStreamSecure:
                     logger.warning(f'Failed to send Disconnect command TLV: {err}')
                     logger.debug(err, exc_info=True)
 
-            async with self._recv_lock:
-                await self._close_tls_gracefully(timeout=timeout)  # send out Alert after the command.
+                async with self._recv_lock:
+                    await self._close_tls_gracefully(timeout=timeout)  # send out Alert after the command.
 
         finally:
             self._peer_public_key = None
             self.peer_challenge = None
             self.ssl_object = None
+            try:
+                await self.stream.disconnect()
+            except asyncio.CancelledError:
+                raise
+            except Exception as err:
+                logger.warning(f'Failed to disconnect BLE link: {err}')
+                logger.debug(err, exc_info=True)
+            finally:
+                self._closed.set()
+                if self.on_closed:
+                    self.on_closed(reason)
 
     # Closes the TLS connection by repeated calls to unwrap() until it succeeds or times out.
-    # Precondition: must only be called by close() with _recv_lock acquired, or by _closed_by_peer()
+    # Precondition: must only be called with _recv_lock acquired, by close() or by _on_alert_from_peer()
     async def _close_tls_gracefully(self, timeout: float = 5.0, buffersize: int = 4096):
         try:
             async with asyncio.timeout(timeout):
@@ -342,7 +390,7 @@ class BleStreamSecure:
         # so they can still report "connected" after the peer has already dropped the
         # BLE link. Checking the link makes the pre-command connection check reflect
         # reality instead of failing later at the actual write.
-        return not self._close_notify_sent and not self._close_notify_received and \
+        return not self._closing and not self._close_notify_sent and not self._close_notify_received and \
             self._peer_public_key is not None and self.ssl_object is not None and \
             self.stream.is_connected
 

@@ -80,8 +80,7 @@ class CLI:
             'diagnostic_tlvs': DiagnosticTlvsCommand()
         }
         self.context = {
-            'ble_sstream': None,  # BleStreamSecure | None
-            'ble_stream': None,  # BleStream | None
+            'ble_sstream': None,  # BleStreamSecure | None (owns the underlying BleStream/UdpStream)
             'dataset': dataset,
             'commands': self._commands,
             'cmd_args': cmd_args

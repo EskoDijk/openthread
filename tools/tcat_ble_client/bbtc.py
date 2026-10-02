@@ -37,7 +37,7 @@ from ble.ble_stream_secure import BleStreamSecure
 from ble.udp_stream import UdpStream
 from ble import ble_scanner
 from cli.cli import CLI
-from cli.base_commands import connection_closed_helper, disconnect_helper
+from cli.base_commands import connection_ended_helper
 from dataset.dataset import ThreadDataset
 from cli.command import CommandResult
 from tlv.tcat_tlv import TcatTLVType
@@ -95,7 +95,7 @@ async def main():
             result: CommandResult = await cli.evaluate_input(user_input)
             result.pretty_print()
         except BleConnectionClosed:
-            await connection_closed_helper(cli.context)
+            await connection_ended_helper(cli.context)
         except Exception as e:
             logger.error(e)
             logger.debug(e, exc_info=True)
@@ -119,7 +119,7 @@ async def receive_loop(cli_context: dict):
             try:
                 data = await bless.recv_unsolicited_event()
             except BleConnectionClosed:
-                await connection_closed_helper(cli_context)
+                await connection_ended_helper(cli_context)
                 continue
 
             if data:
@@ -131,10 +131,7 @@ async def receive_loop(cli_context: dict):
             # The connection can also end without BleConnectionClosed being raised: either the peer
             # closed TLS gracefully (close-notify), or the BLE link itself dropped.
             if not bless.is_connected:
-                if bless.close_notify_received:
-                    await disconnect_helper(cli_context)
-                else:
-                    await connection_closed_helper(cli_context)
+                await connection_ended_helper(cli_context)
                 continue
 
         await asyncio.sleep(0.100)
