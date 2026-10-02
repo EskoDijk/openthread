@@ -30,8 +30,8 @@ import logging
 from os import path
 from typing import Optional
 
-from ble.ble_stream_secure import BleStreamSecure, CloseReason
-from client.transport import Transport, TransportClosed
+from client.tcat_link import CloseReason, TcatLinkClosed, TcatLinkSecure
+from client.transport import Transport
 from tlv.tcat_tlv import TcatTLVType
 from tlv.tlv import TLV
 from utils import hexdump_ot
@@ -39,60 +39,52 @@ from utils import hexdump_ot
 logger = logging.getLogger(__name__)
 
 
-class TcatLinkClosed(Exception):
-    """
-    The link to the TCAT Device turned out to be closed during an operation, independent of the link type
-    (BLE, or UDP for simulation). The client has already closed the session and reported this to the user.
-    """
-    pass
-
-
 class TcatClient:
     """
-    TCAT Commissioner client: owns the session (TLS over a Transport, e.g. BLE) with a TCAT Device.
+    TCAT Commissioner client: owns the TCAT link (TLS over a Transport, e.g. BLE) with a TCAT Device.
 
-    There is at most one session at a time. The session itself receives unsolicited events from the TCAT
-    Device (reported via _handle_unsolicited_event()) and detects the end of the session (peer close, or BLE
-    link loss). All ways of ending a session go through BleStreamSecure.close(), which reports the end once
-    via _on_session_closed().
+    There is at most one link at a time. The link itself receives unsolicited events from the TCAT Device
+    (reported via _handle_unsolicited_event()) and detects its own end (peer close, or transport loss).
+    All ways of ending a link go through TcatLinkSecure.close(), which reports the end once via
+    _on_link_closed().
     """
 
     def __init__(self, cert_path: str = 'auth'):
         self._cert_path = cert_path
-        self._session: Optional[BleStreamSecure] = None
+        self._link: Optional[TcatLinkSecure] = None
 
     @property
-    def session(self) -> Optional[BleStreamSecure]:
-        """The connected session, or None if not connected."""
-        if self._session is not None and self._session.is_connected:
-            return self._session
+    def link(self) -> Optional[TcatLinkSecure]:
+        """The connected TCAT link, or None if not connected."""
+        if self._link is not None and self._link.is_connected:
+            return self._link
         return None
 
     @property
     def is_connected(self) -> bool:
-        return self.session is not None
+        return self.link is not None
 
     async def connect(self, transport: Transport) -> bool:
         """
-        Establishes a new session with a TCAT device over a connected transport, by performing the
-        TLS handshake. Any previous session is closed first.
+        Establishes a new TCAT link with a TCAT device over a connected transport, by performing the
+        TLS handshake. Any previous link is closed first.
 
         Args:
             transport: The connected transport to the TCAT device. The client takes ownership of it:
-                       it is disconnected when the session ends, or when the handshake fails.
+                       it is disconnected when the link ends, or when the handshake fails.
 
         Returns:
             True if connection was successful, False otherwise.
         """
         await self.disconnect()
 
-        session = BleStreamSecure(transport)
-        session.on_event = _handle_unsolicited_event
-        session.on_closed = lambda reason: self._on_session_closed(session, reason)
+        link = TcatLinkSecure(transport)
+        link.on_event = _handle_unsolicited_event
+        link.on_closed = lambda reason: self._on_link_closed(link, reason)
 
         ok = False
         try:
-            session.load_cert(
+            link.load_cert(
                 certfile=path.join(self._cert_path, 'commissioner_cert.pem'),
                 keyfile=path.join(self._cert_path, 'commissioner_key.pem'),
                 cafile=path.join(self._cert_path, 'ca_cert.pem'),
@@ -101,36 +93,36 @@ class TcatClient:
 
             print('Setting up secure channel...')
             is_debug = logger.getEffectiveLevel() <= logging.DEBUG
-            ok = await session.do_handshake(progress_callback=None if is_debug else _handshake_progress_bar,
-                                            timeout=transport.handshake_timeout)
+            ok = await link.do_handshake(progress_callback=None if is_debug else _handshake_progress_bar,
+                                         timeout=transport.handshake_timeout)
         except Exception as e:
             logger.error(e)
         finally:
             if not ok:
-                await session.close(CloseReason.HANDSHAKE_FAILED)
+                await link.close(CloseReason.HANDSHAKE_FAILED)
 
         if ok:
-            self._session = session
+            self._link = link
             print('Done')
         return ok
 
     async def disconnect(self) -> None:
-        """Closes the current session, if any, by local request."""
-        session = self._session
-        if session is None:
+        """Closes the current link, if any, by local request."""
+        link = self._link
+        if link is None:
             return
-        if session.is_connected:
+        if link.is_connected:
             print('Disconnecting...')
-            await session.close(CloseReason.LOCAL)
+            await link.close(CloseReason.LOCAL)
             print('Done')
         else:
-            # Session already ended: tear down (if not done yet) without any over-the-link traffic.
-            await session.close(CloseReason.LOCAL_ABORT)
+            # Link already ended: tear down (if not done yet) without any over-the-link traffic.
+            await link.close(CloseReason.LOCAL_ABORT)
 
     async def abort(self) -> None:
-        """Closes the current session, if any, abruptly: no Disconnect TLV and no TLS close-notify."""
-        if self._session is not None:
-            await self._session.close(CloseReason.LOCAL_ABORT)
+        """Closes the current link, if any, abruptly: no Disconnect TLV and no TLS close-notify."""
+        if self._link is not None:
+            await self._link.close(CloseReason.LOCAL_ABORT)
 
     async def send_with_resp(self, data: bytes) -> bytes:
         """
@@ -142,22 +134,19 @@ class TcatClient:
         Raises:
             TcatLinkClosed: If not connected, or if the link was found closed during the operation.
         """
-        session = self.session
-        if session is None:
+        link = self.link
+        if link is None:
             raise TcatLinkClosed('TCAT Device not connected')
-        try:
-            return await session.send_with_resp(data)
-        except TransportClosed as e:
-            raise TcatLinkClosed(str(e)) from e  # the session has closed itself, and was reported
+        return await link.send_with_resp(data)
 
-    def _on_session_closed(self, session: BleStreamSecure, reason: CloseReason) -> None:
-        # Called exactly once per session, by BleStreamSecure.close().
-        if self._session is session:
-            self._session = None
+    def _on_link_closed(self, link: TcatLinkSecure, reason: CloseReason) -> None:
+        # Called exactly once per link, by TcatLinkSecure.close().
+        if self._link is link:
+            self._link = None
         if reason == CloseReason.PEER_CLOSED:
             print('TCAT Device closed the connection.')
         elif reason == CloseReason.LINK_LOST:
-            print('TCAT Device disconnected: the BLE connection was closed unexpectedly.')
+            print('TCAT Device disconnected: the connection was closed unexpectedly.')
         elif reason == CloseReason.TLS_ERROR:
             print('TCAT Device disconnected: TLS error.')
 

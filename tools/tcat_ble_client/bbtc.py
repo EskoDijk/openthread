@@ -35,7 +35,8 @@ from bleak import BLEDevice
 from ble import ble_scanner
 from cli.base_commands import connect_ble_device, connect_simulation
 from cli.cli import CLI
-from client.tcat_client import TcatClient, TcatLinkClosed
+from client.tcat_client import TcatClient
+from client.tcat_link import TcatLinkClosed
 from dataset.dataset import ThreadDataset
 from cli.command import CommandResult
 from utils import select_device_by_user_input, quit_with_reason
@@ -92,7 +93,7 @@ async def main():
             result: CommandResult = await cli.evaluate_input(user_input)
             result.pretty_print()
         except TcatLinkClosed as e:
-            logger.debug(f'Command ended: {e}')  # session closure already reported by the client
+            logger.debug(f'Command ended: {e}')  # link closure already reported by the client
         except Exception as e:
             logger.error(e)
             logger.debug(e, exc_info=True)

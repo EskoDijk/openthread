@@ -246,14 +246,14 @@ class SimulationBleDisconnectCommand(Command):
 
     async def execute_default(self, args, context) -> CommandResult:
         client: TcatClient = context['client']
-        bless = client.session
-        if bless is None or not isinstance(bless.stream, UdpStream):
+        link = client.link
+        if link is None or not isinstance(link.transport, UdpStream):
             return CommandResultError('only available for a simulation connection (use \'simulation <id>\' first).')
 
         print('Disconnecting simulated BLE link...')
-        # Signal the abrupt link break to the device, then close the session without a TLS
+        # Signal the abrupt link break to the device, then close the TCAT link without a TLS
         # shutdown (no close-notify), mirroring a real abrupt disconnect on the client side too.
-        await bless.stream.simulation_ble_disconnect()
+        await link.transport.simulation_ble_disconnect()
         await client.abort()
         print('Done')
         return CommandResultNone()
@@ -351,10 +351,10 @@ class GetRandomNumberChallenge(BleCommand):
         return TLV(TcatTLVType.GET_RANDOM_NUMBER_CHALLENGE.value, bytes()).to_bytes()
 
     def process_response(self, tlv_response, context) -> None:
-        bless = context['client'].session
-        if bless is not None and tlv_response.value is not None:
+        link = context['client'].link
+        if link is not None and tlv_response.value is not None:
             if len(tlv_response.value) == CHALLENGE_SIZE:
-                bless.peer_challenge = tlv_response.value
+                link.peer_challenge = tlv_response.value
             else:
                 print('Challenge format invalid.')
 
@@ -414,16 +414,16 @@ class PresentHash(BleCommand):
             tlv_type = TcatTLVType.PRESENT_INSTALL_CODE_HASH.value
         else:
             raise DataNotPrepared("Hash code name incorrect.")
-        bless = context['client'].session
-        if bless is None or bless.peer_public_key is None:
+        link = context['client'].link
+        if link is None or link.peer_public_key is None:
             raise DataNotPrepared("Peer certificate not present.")
 
-        if bless.peer_challenge is None:
+        if link.peer_challenge is None:
             raise DataNotPrepared("Peer challenge not present.")
 
         hash = hmac.new(code, digestmod=sha256)
-        hash.update(bless.peer_challenge)
-        hash.update(bless.peer_public_key)
+        hash.update(link.peer_challenge)
+        hash.update(link.peer_public_key)
 
         data = TLV(tlv_type, hash.digest()).to_bytes()
         return data

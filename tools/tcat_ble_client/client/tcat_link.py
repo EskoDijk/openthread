@@ -36,7 +36,7 @@ from typing import Optional, Callable
 from cryptography.x509 import load_der_x509_certificate
 from cryptography.hazmat.primitives.serialization import (Encoding, PublicFormat)
 
-from client.transport import TransportClosed
+from client.transport import Transport, TransportClosed
 from tlv.tlv import TLV
 from tlv.tcat_tlv import TcatTLVType
 import utils
@@ -45,29 +45,37 @@ logger = logging.getLogger(__name__)
 
 
 class CloseReason(Enum):
-    """Reason why a TCAT session (TLS session and underlying BLE link) was closed."""
+    """Reason why a TCAT link (TLS session and underlying transport) was closed."""
     LOCAL = auto()  # closed by local request: graceful, with Disconnect TLV and TLS close-notify
     LOCAL_ABORT = auto()  # closed by local request: abrupt, no over-the-link traffic
     PEER_CLOSED = auto()  # peer closed the TLS session (close-notify received)
-    LINK_LOST = auto()  # underlying BLE link was lost
+    LINK_LOST = auto()  # underlying transport (e.g. BLE link) was lost
     TLS_ERROR = auto()  # fatal TLS error, e.g. a fatal alert received from the peer
     HANDSHAKE_FAILED = auto()  # TLS handshake did not succeed
 
 
-class BleStreamSecure:
+class TcatLinkClosed(Exception):
     """
-    A TCAT session: a TLS session over an underlying stream (BLE, or UDP for simulation).
+    The TCAT link was closed, or turned out to be closed, during an operation. When this is raised, the
+    link has been closed and its closure was reported via TcatLinkSecure.on_closed.
+    """
+    pass
 
-    After a successful handshake, a single reader task is the only reader of the stream. It delivers
+
+class TcatLinkSecure:
+    """
+    A TCAT link: a TLS session with a TCAT Device over an underlying transport (e.g. BLE).
+
+    After a successful handshake, a single reader task is the only reader of the transport. It delivers
     each received TLS record either as the response to the pending request (see send_with_resp()), or
-    otherwise as an unsolicited event (on_event). When it detects the end of the session (TLS close-notify,
-    TLS error, or link loss) it closes the session. All ways of ending the session go through close().
+    otherwise as an unsolicited event (on_event). When it detects the end of the link (TLS close-notify,
+    TLS error, or transport loss) it closes the link. All ways of ending the link go through close().
     """
 
     RECORD_BUFFER_SIZE = 4096
 
-    def __init__(self, stream):
-        self.stream = stream
+    def __init__(self, transport: Transport):
+        self.transport = transport
         self.ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
         self.incoming = ssl.MemoryBIO()
         self.outgoing = ssl.MemoryBIO()
@@ -85,7 +93,7 @@ class BleStreamSecure:
         self.close_reason: Optional[CloseReason] = None
         # Called with the data of each received unsolicited event.
         self.on_event: Optional[Callable[[bytes], None]] = None
-        # Called exactly once, with the CloseReason, when the session is fully closed.
+        # Called exactly once, with the CloseReason, when the link is fully closed.
         self.on_closed: Optional[Callable[[CloseReason], None]] = None
 
     def load_cert(self, certfile='', keyfile='', cafile=''):
@@ -134,7 +142,7 @@ class BleStreamSecure:
                         break
                     except ssl.SSLWantReadError:
                         await self._flush()
-                        self.incoming.write(await self.stream.recv())
+                        self.incoming.write(await self.transport.recv())
                 await self._flush()  # final handshake message(s), if any
         except TimeoutError:
             error = f'TLS Connection timed out (timeout={timeout}s).'
@@ -170,11 +178,11 @@ class BleStreamSecure:
             bytes: The received response data, or empty b'' if no response was received within the timeout.
 
         Raises:
-            TransportClosed: If the session is closed, or gets closed while waiting for the response.
+            TcatLinkClosed: If the link is closed, or gets closed while waiting for the response.
         """
         async with self._request_lock:
             if not self.is_connected:
-                raise TransportClosed('TCAT session is closed')
+                raise TcatLinkClosed('TCAT link is closed')
             response = asyncio.get_running_loop().create_future()
             self._pending_response = response
             try:
@@ -184,35 +192,35 @@ class BleStreamSecure:
             except TimeoutError:
                 logger.error(f'No response when response TLV/line expected (timeout={timeout}s).')
                 return b''
-            except TransportClosed:
+            except TransportClosed as err:
                 response.cancel()  # no longer awaited
-                await self.close(CloseReason.LINK_LOST)  # no-op if the session is already closing
-                raise
+                await self.close(CloseReason.LINK_LOST)  # no-op if the link is already closing
+                raise TcatLinkClosed(str(err)) from err
             finally:
                 self._pending_response = None
 
     async def close(self, reason: CloseReason = CloseReason.LOCAL, timeout: float = 5.0) -> None:
         """
-        Closes the TCAT session: the TLS session and the underlying BLE link.
+        Closes the TCAT link: the TLS session and the underlying transport.
 
         This is the single teardown path for all cases (local request, peer close, link loss,
         handshake failure). It is idempotent: only the first call performs the teardown and
         determines the close reason; any later or concurrent calls just wait for it to complete.
 
         Args:
-            reason: Why the session is closed. Only CloseReason.LOCAL performs a graceful close
-                    (Disconnect TLV and TLS close-notify); the other reasons drop the link directly.
+            reason: Why the link is closed. Only CloseReason.LOCAL performs a graceful close
+                    (Disconnect TLV and TLS close-notify); the other reasons drop the transport directly.
             timeout: The maximum time in seconds for the graceful TLS close.
         """
         if self._closing:
             await self._closed.wait()
             return
 
-        # Determine and record this before any await, so concurrent callers see the session as closing.
+        # Determine and record this before any await, so concurrent callers see the link as closing.
         graceful = reason == CloseReason.LOCAL and self.is_connected
         self._closing = True
         self.close_reason = reason
-        logger.debug(f'Closing TCAT session: {reason.name}')
+        logger.debug(f'Closing TCAT link: {reason.name}')
 
         try:
             if graceful:
@@ -235,17 +243,17 @@ class BleStreamSecure:
 
         finally:
             if self._pending_response is not None and not self._pending_response.done():
-                self._pending_response.set_exception(TransportClosed('TCAT session was closed'))
+                self._pending_response.set_exception(TcatLinkClosed('TCAT link was closed'))
             await self._stop_reader()
             self._peer_public_key = None
             self.peer_challenge = None
             self.ssl_object = None
             try:
-                await self.stream.disconnect()
+                await self.transport.disconnect()
             except asyncio.CancelledError:
                 raise
             except Exception as err:
-                logger.warning(f'Failed to disconnect BLE link: {err}')
+                logger.warning(f'Failed to disconnect transport: {err}')
                 logger.debug(err, exc_info=True)
             finally:
                 self._closed.set()
@@ -258,18 +266,18 @@ class BleStreamSecure:
         return not self._closing and self._reader_task is not None and not self._reader_done.is_set()
 
     async def _reader(self) -> None:
-        """The single reader of the stream while the session is established; closes the session at its end."""
+        """The single reader of the transport while the link is established; closes the link at its end."""
         try:
             reason = await self._read_records()
         finally:
             self._reader_done.set()
-        await self.close(reason)  # no-op if the session is already closing
+        await self.close(reason)  # no-op if the link is already closing
 
     async def _read_records(self) -> CloseReason:
-        """Reads and delivers received TLS records, until the session ends. Returns the reason of the end."""
+        """Reads and delivers received TLS records, until the link ends. Returns the reason of the end."""
         try:
             while True:
-                self.incoming.write(await self.stream.recv())
+                self.incoming.write(await self.transport.recv())
                 while True:
                     try:
                         record = self.ssl_object.read(self.RECORD_BUFFER_SIZE)
@@ -285,7 +293,7 @@ class BleStreamSecure:
                 await self._flush()  # in case reading produced TLS output, e.g. a key update
 
         except TransportClosed as err:
-            logger.debug(f'Link closed: {err}')
+            logger.debug(f'Transport closed: {err}')
             return CloseReason.LINK_LOST
         except ssl.SSLError as err:
             if not self._closing:
@@ -293,7 +301,7 @@ class BleStreamSecure:
             return CloseReason.TLS_ERROR
         except Exception as err:
             if not self._closing:
-                logger.error(f'Link error: {err}')
+                logger.error(f'Transport error: {err}')
                 logger.debug(err, exc_info=True)
             return CloseReason.LINK_LOST
 
@@ -333,7 +341,7 @@ class BleStreamSecure:
     async def _flush(self) -> None:
         async with self._send_lock:
             while self.outgoing.pending > 0:
-                await self.stream.send(self.outgoing.read(self.RECORD_BUFFER_SIZE))
+                await self.transport.send(self.outgoing.read(self.RECORD_BUFFER_SIZE))
 
     @property
     def peer_public_key(self):

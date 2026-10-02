@@ -30,7 +30,6 @@ from abc import ABC, abstractmethod
 
 from tlv.tlv import TLV
 from tlv.tcat_tlv import TcatTLVType
-from ble.ble_stream_secure import BleStreamSecure
 from utils import is_printable_ascii
 
 
