@@ -44,6 +44,11 @@ class Transport(Protocol):
     def is_connected(self) -> bool:
         ...
 
+    @property
+    def handshake_timeout(self) -> float:
+        """Timeout in seconds for the TLS handshake over this transport."""
+        ...
+
     async def send(self, data: bytes) -> None:
         """Sends data. Raises TransportClosed if the transport is closed."""
         ...

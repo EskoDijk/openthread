@@ -40,6 +40,8 @@ class UdpStream:
     BASE_PORT = 10000
     MAX_DATAGRAM_SIZE = 65535
 
+    handshake_timeout = 5.0
+
     def __init__(self, address, node_id):
         self.__connected = True
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

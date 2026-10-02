@@ -32,7 +32,10 @@ from hashlib import sha256
 import hmac
 from secrets import token_bytes
 
+from bleak import BLEDevice
+
 from ble import ble_scanner
+from ble.ble_stream import BleStream
 from ble.udp_stream import UdpStream
 from client.tcat_client import TcatClient
 from cli.command import Command, CommandResultNone, CommandResultTLV, CommandResult, CommandResultError
@@ -439,7 +442,7 @@ class ScanCommand(Command):
         tcat_devices = await ble_scanner.scan_tcat_devices()
         device = select_device_by_user_input(tcat_devices)
         if device is not None:
-            await context['client'].connect(device)
+            await connect_ble_device(context['client'], device)
 
         return CommandResultNone()
 
@@ -455,8 +458,7 @@ class SimulationCommand(Command):
         if context['client'].is_connected:
             return CommandResultError('already connected to a TCAT device. Use \'disconnect\' first.')
 
-        device = UdpStream("127.0.0.1", int(args[0]))
-        await context['client'].connect(device)
+        await connect_simulation(context['client'], int(args[0]))
         return CommandResultNone()
 
 
@@ -521,3 +523,16 @@ class ThreadStateCommand(Command):
     async def execute_default(self, args, context) -> CommandResult:
         print('Invalid usage. Provide a subcommand.')
         return CommandResultNone()
+
+
+async def connect_ble_device(client: TcatClient, device: BLEDevice) -> bool:
+    """Connects the client to a TCAT device over BLE. Returns True if successful."""
+    print(f'Connecting to {device}')
+    return await client.connect(await BleStream.create(device.address))
+
+
+async def connect_simulation(client: TcatClient, node_id: int) -> bool:
+    """Connects the client to a simulated TCAT device (simulation node) over UDP. Returns True if successful."""
+    transport = UdpStream('127.0.0.1', node_id)
+    print(f'Connecting to {transport}')
+    return await client.connect(transport)

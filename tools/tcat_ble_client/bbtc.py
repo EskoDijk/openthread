@@ -32,8 +32,8 @@ import logging
 
 from bleak import BLEDevice
 
-from ble.udp_stream import UdpStream
 from ble import ble_scanner
+from cli.base_commands import connect_ble_device, connect_simulation
 from cli.cli import CLI
 from client.tcat_client import TcatClient, TcatLinkClosed
 from dataset.dataset import ThreadDataset
@@ -68,14 +68,18 @@ async def main():
     for module in logged_modules:
         logging.getLogger(module).setLevel(log_level)
 
-    device = await get_device_by_args(args)
-
     # create client and CLI, and (if selected) connect to TCAT device
     client = TcatClient(cert_path=args.cert_path)
     cli = CLI(ThreadDataset(), client)
-    if device is not None:
-        if not await client.connect(device):
-            quit_with_reason('Failed to connect to TCAT device: TLS handshake failed.')
+    ok = True
+    if args.simulation:
+        ok = await connect_simulation(client, int(args.simulation))
+    else:
+        device = await get_ble_device_by_args(args)
+        if device is not None:
+            ok = await connect_ble_device(client, device)
+    if not ok:
+        quit_with_reason('Failed to connect to TCAT device: TLS handshake failed.')
 
     # run the CLI
     print('Enter \'help\' to see available commands or \'exit\' to exit the application.')
@@ -97,7 +101,7 @@ async def main():
     await client.disconnect()
 
 
-async def get_device_by_args(args) -> BLEDevice | UdpStream | None:
+async def get_ble_device_by_args(args) -> BLEDevice | None:
     device = None
     if args.mac:
         device = await ble_scanner.find_first_by_mac(args.mac)
@@ -106,8 +110,6 @@ async def get_device_by_args(args) -> BLEDevice | UdpStream | None:
     elif args.scan:
         tcat_devices = await ble_scanner.scan_tcat_devices(adapter=args.adapter)
         device = select_device_by_user_input(tcat_devices)
-    elif args.simulation:
-        device = UdpStream("127.0.0.1", int(args.simulation))
 
     return device
 

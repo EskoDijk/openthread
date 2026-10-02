@@ -35,6 +35,7 @@ from bleak import BleakClient
 from bleak.backends.device import BLEDevice
 from bleak.backends.characteristic import BleakGATTCharacteristic
 
+from ble.ble_connection_constants import BBTC_SERVICE_UUID, BBTC_TX_CHAR_UUID, BBTC_RX_CHAR_UUID
 from client.transport import TransportClosed
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,8 @@ logger = logging.getLogger(__name__)
 
 class BleStream:
     """BLE transport (a client.transport.Transport) to a TCAT device, using the TCAT GATT service."""
+
+    handshake_timeout = 30.0
 
     def __init__(self, client, service_uuid, tx_char_uuid, rx_char_uuid):
         self.__receive_buffer = bytearray()
@@ -75,7 +78,12 @@ class BleStream:
         return takewhile(len, (data[i:i + n] for i in count(0, n)))
 
     @classmethod
-    async def create(cls, address_or_ble_device: Union[BLEDevice, str], service_uuid, tx_char_uuid, rx_char_uuid):
+    async def create(cls,
+                     address_or_ble_device: Union[BLEDevice, str],
+                     service_uuid=BBTC_SERVICE_UUID,
+                     tx_char_uuid=BBTC_TX_CHAR_UUID,
+                     rx_char_uuid=BBTC_RX_CHAR_UUID):
+        """Connects to a TCAT device over BLE and returns the connected BleStream."""
         self = cls(None, service_uuid, tx_char_uuid, rx_char_uuid)
         client = BleakClient(address_or_ble_device, disconnected_callback=self.__handle_disconnected)
         self.client = client

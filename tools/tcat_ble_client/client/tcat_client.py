@@ -30,13 +30,8 @@ import logging
 from os import path
 from typing import Optional
 
-from bleak import BLEDevice
-
-from ble.ble_connection_constants import BBTC_SERVICE_UUID, BBTC_TX_CHAR_UUID, BBTC_RX_CHAR_UUID
-from ble.ble_stream import BleStream
 from ble.ble_stream_secure import BleStreamSecure, CloseReason
-from ble.udp_stream import UdpStream
-from client.transport import TransportClosed
+from client.transport import Transport, TransportClosed
 from tlv.tcat_tlv import TcatTLVType
 from tlv.tlv import TLV
 from utils import hexdump_ot
@@ -54,7 +49,7 @@ class TcatLinkClosed(Exception):
 
 class TcatClient:
     """
-    TCAT Commissioner client: owns the session (TLS over BLE, or over UDP for simulation) with a TCAT Device.
+    TCAT Commissioner client: owns the session (TLS over a Transport, e.g. BLE) with a TCAT Device.
 
     There is at most one session at a time. The session itself receives unsolicited events from the TCAT
     Device (reported via _handle_unsolicited_event()) and detects the end of the session (peer close, or BLE
@@ -77,28 +72,21 @@ class TcatClient:
     def is_connected(self) -> bool:
         return self.session is not None
 
-    async def connect(self, device: BLEDevice | UdpStream, timeout_ble=30.0, timeout_simulation=5.0) -> bool:
+    async def connect(self, transport: Transport) -> bool:
         """
-        Establishes a new session with a TCAT device: connects the BLE link (or simulation UDP link)
-        and performs the TLS handshake. Any previous session is closed first.
+        Establishes a new session with a TCAT device over a connected transport, by performing the
+        TLS handshake. Any previous session is closed first.
 
         Args:
-            device: BLEDevice object, or UdpStream (for simulation)
-            timeout_ble: Timeout in seconds for handshake with real TCAT device
-            timeout_simulation: Timeout in seconds for handshake for simulated TCAT device
+            transport: The connected transport to the TCAT device. The client takes ownership of it:
+                       it is disconnected when the session ends, or when the handshake fails.
 
         Returns:
             True if connection was successful, False otherwise.
         """
         await self.disconnect()
 
-        is_simulation = isinstance(device, UdpStream)
-        print(f'Connecting to {device}')
-        if is_simulation:
-            stream = device
-        else:
-            stream = await BleStream.create(device.address, BBTC_SERVICE_UUID, BBTC_TX_CHAR_UUID, BBTC_RX_CHAR_UUID)
-        session = BleStreamSecure(stream)
+        session = BleStreamSecure(transport)
         session.on_event = _handle_unsolicited_event
         session.on_closed = lambda reason: self._on_session_closed(session, reason)
 
@@ -114,7 +102,7 @@ class TcatClient:
             print('Setting up secure channel...')
             is_debug = logger.getEffectiveLevel() <= logging.DEBUG
             ok = await session.do_handshake(progress_callback=None if is_debug else _handshake_progress_bar,
-                                            timeout=timeout_simulation if is_simulation else timeout_ble)
+                                            timeout=transport.handshake_timeout)
         except Exception as e:
             logger.error(e)
         finally:
