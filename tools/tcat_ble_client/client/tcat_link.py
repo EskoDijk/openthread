@@ -94,10 +94,10 @@ class TcatLinkSecure:
         self.ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
         self.incoming = ssl.MemoryBIO()
         self.outgoing = ssl.MemoryBIO()
-        self.ssl_object = None
+        self.ssl_object: Optional[ssl.SSLObject] = None
         self.cert = ''
-        self.peer_challenge = None
-        self._peer_public_key = None
+        self._peer_challenge: Optional[bytes] = None
+        self._peer_public_key: Optional[bytes] = None
         self._send_lock = asyncio.Lock()  # keeps encrypted output of concurrent senders in order
         self._request_lock = asyncio.Lock()  # at most one outstanding request
         self._pending_response: Optional[asyncio.Future] = None
@@ -261,7 +261,7 @@ class TcatLinkSecure:
                 self._pending_response.set_exception(TcatLinkClosed('TCAT link was closed'))
             await self._stop_reader()
             self._peer_public_key = None
-            self.peer_challenge = None
+            self._peer_challenge = None
             self.ssl_object = None
             try:
                 await self.transport.disconnect()
@@ -291,6 +291,7 @@ class TcatLinkSecure:
     async def _read_records(self) -> CloseReason:
         """Reads and delivers received TLS records, until the link ends. Returns the reason of the end."""
         try:
+            assert self.ssl_object is not None  # only cleared by close(), after stopping the reader
             while True:
                 self.incoming.write(await self.transport.recv())
                 while True:
@@ -343,10 +344,12 @@ class TcatLinkSecure:
     async def _send(self, data: bytes) -> None:
         hexdump_str = utils.hexdump_ot("Tx", data) if len(data) > 0 else ''
         logger.debug(f"tx {len(data)} bytes\n{hexdump_str}")
+        assert self.ssl_object is not None  # only called while connected, or by close() before clearing it
         self.ssl_object.write(data)
         await self._flush()
 
     async def _send_close_notify(self) -> None:
+        assert self.ssl_object is not None  # only called by close() before clearing it
         try:
             self.ssl_object.unwrap()
         except ssl.SSLWantReadError:
@@ -359,15 +362,15 @@ class TcatLinkSecure:
                 await self.transport.send(self.outgoing.read(self.RECORD_BUFFER_SIZE))
 
     @property
-    def peer_public_key(self):
+    def peer_public_key(self) -> Optional[bytes]:
         return self._peer_public_key
 
     @property
-    def peer_challenge(self):
+    def peer_challenge(self) -> Optional[bytes]:
         return self._peer_challenge
 
     @peer_challenge.setter
-    def peer_challenge(self, value):
+    def peer_challenge(self, value: Optional[bytes]) -> None:
         self._peer_challenge = value
 
     def log_cert_identities(self):
