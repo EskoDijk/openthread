@@ -82,24 +82,35 @@ async def main():
     if not ok:
         quit_with_reason('Failed to connect to TCAT device: TLS handshake failed.')
 
-    # run the CLI
+    # run the CLI, until 'exit', Ctrl-D (EOF) or Ctrl-C
     print('Enter \'help\' to see available commands or \'exit\' to exit the application.')
     loop = asyncio.get_running_loop()
-    while True:
-        user_input = await loop.run_in_executor(None, lambda: input('> '))
-        if user_input.lower() == 'exit':
-            break
-        try:
-            result: CommandResult = await cli.evaluate_input(user_input)
-            result.pretty_print()
-        except TcatLinkClosed as e:
-            logger.debug(f'Command ended: {e}')  # link closure already reported by the client
-        except Exception as e:
-            logger.error(e)
-            logger.debug(e, exc_info=True)
+    try:
+        while True:
+            try:
+                user_input = await loop.run_in_executor(None, lambda: input('> '))
+            except EOFError:
+                print()
+                break
+            if user_input.lower() == 'exit':
+                break
+            try:
+                result: CommandResult = await cli.evaluate_input(user_input)
+                result.pretty_print()
+            except TcatLinkClosed as e:
+                logger.debug(f'Command ended: {e}')  # link closure already reported by the client
+            except Exception as e:
+                logger.error(e)
+                logger.debug(e, exc_info=True)
 
-    # Disconnect from TCAT device (if needed)
-    await client.disconnect()
+    except asyncio.CancelledError:
+        # Ctrl-C: asyncio.run() cancels this main task. Handle it as a normal exit.
+        asyncio.current_task().uncancel()
+        print()
+
+    finally:
+        # Disconnect from TCAT device (if needed)
+        await client.disconnect()
 
 
 async def get_ble_device_by_args(args) -> BLEDevice | None:
@@ -116,7 +127,4 @@ async def get_ble_device_by_args(args) -> BLEDevice | None:
 
 
 if __name__ == '__main__':
-    try:
-        asyncio.run(main())
-    except asyncio.CancelledError:
-        pass  # device disconnected
+    asyncio.run(main())
