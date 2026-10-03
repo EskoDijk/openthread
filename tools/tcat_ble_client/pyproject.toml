@@ -12,6 +12,8 @@ package-mode = false
 [tool.poetry.dependencies]
 python = "^3.11"
 bleak = "^1.0"
-pytest ="^8.4"
 cryptography = "^46.0"
 pyreadline3 = { version = "^3.5", platform = "win32" }
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4"
