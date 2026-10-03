@@ -265,8 +265,6 @@ class TcatLinkSecure:
             self.ssl_object = None
             try:
                 await self.transport.disconnect()
-            except asyncio.CancelledError:
-                raise
             except Exception as err:
                 logger.warning(f'Failed to disconnect TCAT transport: {err}')
                 logger.debug(err, exc_info=True)
@@ -389,7 +387,5 @@ class TcatLinkSecure:
                 logger.info(f'  base64: (paste in https://lapo.it/asn1js/ to decode)\n{peer_cert_der_hex}')
             logger.info(f'TCAT Commissioner cert, PEM:\n{self.cert}')
 
-        except asyncio.CancelledError:
-            raise
         except Exception as e:
             logger.warning(f'Could not display TCAT cert info: {e}')
