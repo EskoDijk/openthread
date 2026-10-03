@@ -113,7 +113,7 @@ class TcatClient:
             return
         if link.is_connected:
             print('Disconnecting...')
-            await link.close(CloseReason.LOCAL)
+            await link.close(CloseReason.LOCAL_CLOSED)
             print('Done')
         else:
             # Link already ended: tear down (if not done yet) without any over-the-link traffic.

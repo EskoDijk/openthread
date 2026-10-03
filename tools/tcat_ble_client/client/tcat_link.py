@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 class CloseReason(Enum):
     """Reason why a TCAT link (TLS session and underlying transport) was closed."""
-    LOCAL = auto()  # closed by local request: graceful, with Disconnect TLV and TLS close-notify
+    LOCAL_CLOSED = auto()  # closed by local request: graceful, with Disconnect TLV and TLS close-notify
     LOCAL_ABORT = auto()  # closed by local request: abrupt, no over-the-link traffic
     PEER_CLOSED = auto()  # peer closed the TLS session (close-notify received)
     LINK_LOST = auto()  # underlying transport (e.g. BLE link) was lost
@@ -60,7 +60,7 @@ class CloseReason(Enum):
 
 
 _CLOSE_REASON_DESCRIPTIONS = {
-    CloseReason.LOCAL: 'closed by local request',
+    CloseReason.LOCAL_CLOSED: 'closed by local request',
     CloseReason.LOCAL_ABORT: 'aborted by local request',
     CloseReason.PEER_CLOSED: 'closed by the TCAT Device',
     CloseReason.LINK_LOST: 'link lost or closed unexpectedly',
@@ -214,7 +214,7 @@ class TcatLinkSecure:
             finally:
                 self._pending_response = None
 
-    async def close(self, reason: CloseReason = CloseReason.LOCAL, timeout: float = 5.0) -> None:
+    async def close(self, reason: CloseReason = CloseReason.LOCAL_CLOSED, timeout: float = 5.0) -> None:
         """
         Closes the TCAT link: the TLS session and the underlying transport.
 
@@ -232,7 +232,7 @@ class TcatLinkSecure:
             return
 
         # Determine and record this before any await, so concurrent callers see the link as closing.
-        graceful = reason == CloseReason.LOCAL and self.is_connected
+        graceful = reason == CloseReason.LOCAL_CLOSED and self.is_connected
         self._closing = True
         self.close_reason = reason
         logger.debug(f'Closing TCAT link: {reason.name} ({reason.description})')
@@ -268,7 +268,7 @@ class TcatLinkSecure:
             except asyncio.CancelledError:
                 raise
             except Exception as err:
-                logger.warning(f'Failed to disconnect transport: {err}')
+                logger.warning(f'Failed to disconnect TCAT transport: {err}')
                 logger.debug(err, exc_info=True)
             finally:
                 self._closed.set()
