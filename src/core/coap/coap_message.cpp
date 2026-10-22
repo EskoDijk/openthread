@@ -423,44 +423,6 @@ exit:
     return error;
 }
 
-Error Message::ReadFetchRequestOptions(bool &aHasOscoreOption, bool &aHasContentFmtOption) const
-{
-    Error            error = kErrorNone;
-    Option::Iterator iterator;
-
-    aHasOscoreOption     = false;
-    aHasContentFmtOption = false;
-
-    SuccessOrExit(error = iterator.Init(*this));
-
-    while (!iterator.IsDone())
-    {
-        uint16_t optionNum = iterator.GetOption()->GetNumber();
-
-        if (optionNum > kOptionContentFormat)
-        {
-            break;
-        }
-
-        switch (iterator.GetOption()->GetNumber())
-        {
-        case kOptionOscore:
-            aHasOscoreOption = true;
-            break;
-        case kOptionContentFormat:
-            aHasContentFmtOption = true;
-            break;
-        default:
-            break;
-        }
-
-        SuccessOrExit(error = iterator.Advance());
-    }
-
-exit:
-    return error;
-}
-
 Error Message::AppendUriQueryOptions(const char *aUriQuery)
 {
     Error       error = kErrorNone;

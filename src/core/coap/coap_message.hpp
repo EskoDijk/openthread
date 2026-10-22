@@ -709,17 +709,6 @@ public:
     Error ReadUriPathOptions(UriPathStringBuffer &aUriPath) const;
 
     /**
-     * Reads FETCH request options to detect presence of OSCORE and Content-Format options.
-     *
-     * @param[out]  aHasOscoreOption     Set to `true` if OSCORE option is present.
-     * @param[out]  aHasContentFmtOption Set to `true` if Content-Format option is present.
-     *
-     * @retval  kErrorNone   Successfully read options.
-     * @retval  kErrorParse  CoAP Option header not well-formed.
-     */
-    Error ReadFetchRequestOptions(bool &aHasOscoreOption, bool &aHasContentFmtOption) const;
-
-    /**
      * Appends a Uri-Query option.
      *
      * @param[in]  aUriQuery          A pointer to a null-terminated string.

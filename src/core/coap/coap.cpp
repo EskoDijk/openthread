@@ -721,16 +721,21 @@ void CoapBase::ProcessReceivedRequest(Msg &aRxMsg)
 
     SuccessOrExit(error = aRxMsg.mMessage.ReadUriPathOptions(uriPath));
 
-    if (aRxMsg.GetCode() == kCodeFetch)
+    // Check that a FETCH request has at least one of a Content-Format (RFC 8132), or OSCORE option (RFC 8613).
+    if (aRxMsg.IsFetchRequest())
     {
-        bool hasOscoreOption     = false;
-        bool hasContentFmtOption = false;
+        Option::Iterator iterator;
 
-        SuccessOrExit(error = aRxMsg.mMessage.ReadFetchRequestOptions(hasOscoreOption, hasContentFmtOption));
+        SuccessOrExit(error = iterator.Init(aRxMsg.mMessage, kOptionOscore));
 
-        if (!hasOscoreOption && !hasContentFmtOption)
+        if (iterator.IsDone())
         {
-            if (aRxMsg.IsConfirmable())
+            SuccessOrExit(error = iterator.Init(aRxMsg.mMessage, kOptionContentFormat));
+        }
+
+        if (iterator.IsDone())
+        {
+            if (!aRxMsg.mMessageInfo.GetSockAddr().IsMulticast())
             {
                 IgnoreError(SendResponse(kCodeUnsupportedFormat, aRxMsg));
             }
