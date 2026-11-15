@@ -1028,8 +1028,8 @@ void TestListenerAndCslScheduling(void)
 {
     static constexpr uint8_t  kCslChannel          = 15;
     static constexpr uint8_t  kTdChannel           = 20;
-    static constexpr uint16_t kCslPeriodTenSymbols = 250;
-    static constexpr uint32_t kCslPeriodUs         = Mac::CslPeriodToUsec(kCslPeriodTenSymbols); // 40000 us
+    static constexpr uint32_t kCslPeriodUs         = 40000;
+    static constexpr uint16_t kCslPeriodTenSymbols = kCslPeriodUs / Radio::kTenSymbolsDuration;
     static constexpr uint32_t kCslAhead            = OPENTHREAD_CONFIG_MIN_RECEIVE_ON_AHEAD;
     static constexpr uint32_t kCslAfter            = OPENTHREAD_CONFIG_MIN_RECEIVE_ON_AFTER;
     static constexpr uint32_t kCslDuration         = kCslAhead + kCslAfter;

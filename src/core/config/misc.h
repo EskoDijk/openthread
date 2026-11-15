@@ -499,6 +499,44 @@
 #endif
 
 /**
+ * @def OPENTHREAD_CONFIG_RADIO_BIT_RATE
+ *
+ * The bit rate of the IEEE 802.15.4 PHY, in bits per second.
+ *
+ * Together with `OPENTHREAD_CONFIG_RADIO_SYMBOLS_PER_OCTET` this determines the PHY symbol rate and symbol duration
+ * (see `OT_RADIO_SYMBOL_RATE` and `OT_RADIO_SYMBOL_TIME`), from which all the PHY-dependent MAC timings are derived
+ * (e.g., CSMA-CA backoff, CCA and frame durations, and the 10-symbols unit of the CSL period and phase).
+ *
+ * The default of 250000 is the bit rate of the O-QPSK PHY in the 780 MHz, 915 MHz, 2380 MHz, and 2450 MHz bands. The
+ * O-QPSK PHY in the 868 MHz band uses 100000.
+ *
+ * The resulting symbol duration MUST be a whole number of microseconds.
+ *
+ * @note When changing this setting from its default, it MUST be defined globally, i.e., on the compiler command line
+ *       (e.g., using the CMake option `OT_RADIO_BIT_RATE`) or in `OPENTHREAD_CONFIG_FILE`, and not in the project or
+ *       platform core config header files. This is required since the constants in the public platform header
+ *       `openthread/platform/radio.h`, which is also used by the radio platform, are derived from it.
+ */
+#ifndef OPENTHREAD_CONFIG_RADIO_BIT_RATE
+#define OPENTHREAD_CONFIG_RADIO_BIT_RATE 250000
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_RADIO_SYMBOLS_PER_OCTET
+ *
+ * The number of symbols the IEEE 802.15.4 PHY uses to transmit one octet.
+ *
+ * The default of 2 is the value for the O-QPSK PHY (4 bits per symbol). A PHY carrying one bit per symbol (e.g., a
+ * binary FSK PHY) uses 8.
+ *
+ * @note When changing this setting from its default, it MUST be defined globally, in the same way as
+ *       `OPENTHREAD_CONFIG_RADIO_BIT_RATE`.
+ */
+#ifndef OPENTHREAD_CONFIG_RADIO_SYMBOLS_PER_OCTET
+#define OPENTHREAD_CONFIG_RADIO_SYMBOLS_PER_OCTET 2
+#endif
+
+/**
  * @def OPENTHREAD_CONFIG_DEFAULT_CHANNEL
  *
  * The default IEEE 802.15.4 channel.

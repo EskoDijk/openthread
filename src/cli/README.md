@@ -1456,7 +1456,7 @@ Done
 
 Set CSL period in microseconds. Disable CSL by setting this parameter to `0`.
 
-The CSL period MUST be a multiple 160 microseconds which is 802.15.4 "ten symbols time".
+The CSL period MUST be a multiple of the 802.15.4 "ten symbols time", which is 160 microseconds for the default 250 kbps PHY.
 
 `OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE` is required.
 

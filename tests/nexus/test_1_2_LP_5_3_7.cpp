@@ -75,9 +75,9 @@ static constexpr uint16_t kEchoPayloadSize = 10;
 static constexpr uint16_t kEchoIdentifier = 0x1234;
 
 /**
- * CSL period in units of 160us. 500ms = 3125 * 160us.
+ * CSL period of 500ms, in units of 10 symbols.
  */
-static constexpr uint16_t kCslPeriod = 3125;
+static constexpr uint16_t kCslPeriod = kCslPeriod500ms;
 
 /**
  * CSL synchronized timeout in seconds.

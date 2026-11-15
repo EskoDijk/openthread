@@ -977,9 +977,10 @@ otError otLinkSetCslChannel(otInstance *aInstance, uint8_t aChannel);
 /**
  * Represents CSL period ten symbols unit in microseconds.
  *
- * The CSL period (in micro seconds) MUST be a multiple of this value.
+ * The CSL period (in micro seconds) MUST be a multiple of this value. It depends on the PHY symbol rate (see
+ * `OT_RADIO_SYMBOL_RATE`) and is 160 microseconds for the default 250 kbps O-QPSK PHY.
  */
-#define OT_LINK_CSL_PERIOD_TEN_SYMBOLS_UNIT_IN_USEC (160)
+#define OT_LINK_CSL_PERIOD_TEN_SYMBOLS_UNIT_IN_USEC OT_US_PER_TEN_SYMBOLS
 
 /**
  * Gets the CSL period in microseconds

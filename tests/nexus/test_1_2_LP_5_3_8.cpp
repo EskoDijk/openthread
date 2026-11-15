@@ -77,9 +77,9 @@ static constexpr uint32_t kChildUpdateResponseWaitTime = 1000;
 static constexpr uint32_t kWaitPendingDatasetTime = 30 * 1000;
 
 /**
- * CSL Period in units of 160 microseconds. 500ms = 3125 units.
+ * CSL Period of 500ms, in units of 10 symbols.
  */
-static constexpr uint16_t kCslPeriod = 3125;
+static constexpr uint16_t kCslPeriod = kCslPeriod500ms;
 
 /**
  * CSL Synchronized Timeout in seconds.

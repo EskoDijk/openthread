@@ -69,15 +69,18 @@ constexpr uint8_t kSfdSize       = 1;                                   ///< SFD
 constexpr uint8_t kPhrSize       = 1;                                   ///< PHY Header (PHR) size in bytes.
 constexpr uint8_t kPhyHeaderSize = kPreambleSize + kSfdSize + kPhrSize; ///< Total PHY header size in bytes.
 
-constexpr uint32_t kHeaderShrDuration = 160; ///< Duration of SHR in us
-constexpr uint32_t kHeaderPhrDuration = 32;  ///< Duration of PHR in us
-constexpr uint32_t kOctetDuration     = 32;  ///< Duration of one octet in us
+constexpr uint32_t kSymbolTime      = OT_RADIO_SYMBOL_TIME;           ///< Duration of one symbol in us.
+constexpr uint8_t  kSymbolsPerOctet = OT_RADIO_SYMBOLS_PER_OCTET;     ///< Number of symbols per octet.
+constexpr uint32_t kPhyUsPerByte    = kSymbolsPerOctet * kSymbolTime; ///< Duration of one octet in us.
 
-constexpr uint32_t kSymbolTime      = OT_RADIO_SYMBOL_TIME;
-constexpr uint8_t  kSymbolsPerOctet = OT_RADIO_SYMBOLS_PER_OCTET;
-constexpr uint32_t kPhyUsPerByte    = kSymbolsPerOctet * kSymbolTime;
-constexpr uint8_t  kChannelPage0    = OT_RADIO_CHANNEL_PAGE_0;
-constexpr uint8_t  kChannelPage2    = OT_RADIO_CHANNEL_PAGE_2;
+constexpr uint32_t kHeaderShrDuration = (kPreambleSize + kSfdSize) * kPhyUsPerByte; ///< Duration of SHR in us.
+constexpr uint32_t kHeaderPhrDuration = kPhrSize * kPhyUsPerByte;                   ///< Duration of PHR in us.
+
+constexpr uint32_t kCcaDuration    = 8 * kSymbolTime;  ///< CCA duration in us (aCcaTime, 8 symbols).
+constexpr uint32_t kTurnaroundTime = 12 * kSymbolTime; ///< RX-to-TX or TX-to-RX turnaround time in us (12 symbols).
+
+constexpr uint8_t kChannelPage0 = OT_RADIO_CHANNEL_PAGE_0;
+constexpr uint8_t kChannelPage2 = OT_RADIO_CHANNEL_PAGE_2;
 #if (OPENTHREAD_CONFIG_RADIO_2P4GHZ_OQPSK_SUPPORT && OPENTHREAD_CONFIG_RADIO_915MHZ_OQPSK_SUPPORT)
 constexpr uint16_t kNumChannelPages   = 2;
 constexpr uint32_t kSupportedChannels = OT_RADIO_915MHZ_OQPSK_CHANNEL_MASK | OT_RADIO_2P4GHZ_OQPSK_CHANNEL_MASK;

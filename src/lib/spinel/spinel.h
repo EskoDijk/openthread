@@ -2981,7 +2981,8 @@ enum
      *
      * The CSL period in microseconds. Value of 0 indicates that CSL should be disabled.
      *
-     * The CSL period MUST be a multiple of 160 (which is 802.15 "ten symbols time").
+     * The CSL period MUST be a multiple of the 802.15.4 "ten symbols time" (which is 160 microseconds for the
+     * default 250 kbps PHY).
      */
     SPINEL_PROP_THREAD_CSL_PERIOD = SPINEL_PROP_THREAD_EXT__BEGIN + 41,
 

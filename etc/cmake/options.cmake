@@ -359,6 +359,8 @@ ot_int_option(OT_BORDER_ROUTING_DHCP6_PD_MIN_LIFETIME OPENTHREAD_CONFIG_BORDER_R
 ot_int_option(OT_LOG_MAX_SIZE OPENTHREAD_CONFIG_LOG_MAX_SIZE "set maximum log string size")
 ot_int_option(OT_MAC_CSL_REQUEST_AHEAD_US OPENTHREAD_CONFIG_MAC_CSL_REQUEST_AHEAD_US "set time ahead to deliver CSL frame from MAC to SubMac in microseconds")
 ot_int_option(OT_MLE_MAX_CHILDREN OPENTHREAD_CONFIG_MLE_MAX_CHILDREN "set maximum number of children")
+ot_int_option(OT_RADIO_BIT_RATE OPENTHREAD_CONFIG_RADIO_BIT_RATE "set the 802.15.4 PHY bit rate in bits per second")
+ot_int_option(OT_RADIO_SYMBOLS_PER_OCTET OPENTHREAD_CONFIG_RADIO_SYMBOLS_PER_OCTET "set the number of 802.15.4 PHY symbols per octet")
 ot_int_option(OT_RCP_RESTORATION_MAX_COUNT OPENTHREAD_SPINEL_CONFIG_RCP_RESTORATION_MAX_COUNT "set max RCP restoration count")
 ot_int_option(OT_RCP_TIME_SYNC_INTERVAL OPENTHREAD_SPINEL_CONFIG_RCP_TIME_SYNC_INTERVAL "set host-RCP time sync interval in microseconds")
 ot_int_option(OT_RCP_TX_WAIT_TIME_SECS OPENTHREAD_SPINEL_CONFIG_RCP_TX_WAIT_TIME_SECS "set RCP TX wait TIME in seconds")

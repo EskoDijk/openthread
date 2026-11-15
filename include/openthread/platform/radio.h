@@ -38,6 +38,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include <openthread/config.h>
 #include <openthread/error.h>
 #include <openthread/instance.h>
 #include <openthread/platform/crypto.h>
@@ -65,21 +66,60 @@ extern "C" {
  * @{
  */
 
+/**
+ * @def OT_RADIO_BIT_RATE
+ *
+ * The PHY bit rate, in bits per second.
+ *
+ * Defaults to 250000, the bit rate of the IEEE 802.15.4 O-QPSK PHY when operating in the 780 MHz, 915 MHz, 2380 MHz,
+ * or 2450 MHz band. It can be changed at build time using `OPENTHREAD_CONFIG_RADIO_BIT_RATE`, e.g., to 100000 for the
+ * O-QPSK PHY operating in the 868 MHz band.
+ *
+ * @note `OPENTHREAD_CONFIG_RADIO_BIT_RATE` MUST be defined globally (on the compiler command line or in
+ *       `OPENTHREAD_CONFIG_FILE`), so that every module including this header uses the same value.
+ */
+#ifdef OPENTHREAD_CONFIG_RADIO_BIT_RATE
+#define OT_RADIO_BIT_RATE OPENTHREAD_CONFIG_RADIO_BIT_RATE
+#else
+#define OT_RADIO_BIT_RATE 250000
+#endif
+
+/**
+ * @def OT_RADIO_SYMBOLS_PER_OCTET
+ *
+ * The number of PHY symbols per octet.
+ *
+ * Defaults to 2, the value for the IEEE 802.15.4 O-QPSK PHY (4 bits per symbol). It can be changed at build time using
+ * `OPENTHREAD_CONFIG_RADIO_SYMBOLS_PER_OCTET`, e.g., to 8 for a PHY carrying one bit per symbol.
+ *
+ * @note `OPENTHREAD_CONFIG_RADIO_SYMBOLS_PER_OCTET` MUST be defined globally (on the compiler command line or in
+ *       `OPENTHREAD_CONFIG_FILE`), so that every module including this header uses the same value.
+ */
+#ifdef OPENTHREAD_CONFIG_RADIO_SYMBOLS_PER_OCTET
+#define OT_RADIO_SYMBOLS_PER_OCTET OPENTHREAD_CONFIG_RADIO_SYMBOLS_PER_OCTET
+#else
+#define OT_RADIO_SYMBOLS_PER_OCTET 2
+#endif
+
+#define OT_RADIO_BITS_PER_OCTET 8 ///< Number of bits per octet
+
+/**
+ * The PHY symbol rate, in symbols per second.
+ *
+ * Derived from `OT_RADIO_BIT_RATE` and `OT_RADIO_SYMBOLS_PER_OCTET`. Per IEEE 802.15.4-2015, 12.3.3 Symbol rate: The
+ * O-QPSK PHY symbol rate shall be 25 ksymbol/s when operating in the 868 MHz band and 62.5 ksymbol/s when operating in
+ * the 780 MHz, 915 MHz, 2380 MHz, or 2450 MHz band.
+ */
+#define OT_RADIO_SYMBOL_RATE (((OT_RADIO_BIT_RATE) * (OT_RADIO_SYMBOLS_PER_OCTET)) / OT_RADIO_BITS_PER_OCTET)
+
+#define OT_RADIO_SYMBOL_TIME (1000000 / OT_RADIO_SYMBOL_RATE) ///< Symbol duration time in unit of microseconds
+#define OT_RADIO_TEN_SYMBOLS_TIME (10 * OT_RADIO_SYMBOL_TIME) ///< Time for 10 symbols in unit of microseconds
+#define OT_RADIO_OCTET_TIME ((OT_RADIO_SYMBOLS_PER_OCTET) * OT_RADIO_SYMBOL_TIME) ///< Octet duration in microseconds
+
 enum
 {
     OT_RADIO_FRAME_MAX_SIZE = 127, ///< aMaxPHYPacketSize (IEEE 802.15.4-2006)
     OT_RADIO_FRAME_MIN_SIZE = 3,   ///< Minimal size of frame FCS + CONTROL
-
-    OT_RADIO_SYMBOLS_PER_OCTET = 2,      ///< 2.4 GHz IEEE 802.15.4-2006
-    OT_RADIO_BIT_RATE          = 250000, ///< 2.4 GHz IEEE 802.15.4 (bits per second)
-    OT_RADIO_BITS_PER_OCTET    = 8,      ///< Number of bits per octet
-
-    // Per IEEE 802.15.4-2015, 12.3.3 Symbol rate:
-    // The O-QPSK PHY symbol rate shall be 25 ksymbol/s when operating in the 868 MHz band and 62.5 ksymbol/s when
-    // operating in the 780 MHz, 915 MHz, 2380 MHz, or 2450 MHz band
-    OT_RADIO_SYMBOL_RATE = 62500, ///< The O-QPSK PHY symbol rate when operating in the 780MHz, 915MHz, 2380MHz, 2450MHz
-    OT_RADIO_SYMBOL_TIME = 1000000 * 1 / OT_RADIO_SYMBOL_RATE, ///< Symbol duration time in unit of microseconds
-    OT_RADIO_TEN_SYMBOLS_TIME = 10 * OT_RADIO_SYMBOL_TIME,     ///< Time for 10 symbols in unit of microseconds
 
     OT_RADIO_LQI_NONE             = 0,         ///< LQI measurement not supported
     OT_RADIO_RSSI_INVALID         = 127,       ///< Invalid or unknown RSSI value

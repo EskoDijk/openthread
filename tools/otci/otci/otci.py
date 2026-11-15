@@ -1607,7 +1607,7 @@ class OTCI(object):
         """Set the CSL timeout
 
         Args:
-            period (int): csl period [us] in multiples of 160us
+            period (int): csl period [us] in multiples of the "ten symbols time" (160us for the 250 kbps PHY)
         """
         self.execute_command(f"csl period {period}")
 

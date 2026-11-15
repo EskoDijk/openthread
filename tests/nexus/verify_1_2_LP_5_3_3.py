@@ -91,7 +91,7 @@ def verify(pv):
         filter_wpan_dst64(DUT).\
         filter_mle_cmd(consts.MLE_CHILD_UPDATE_REQUEST).\
         filter(lambda p: p.wpan.version == 2).\
-        filter(lambda p: p.wpan.header_ie.csl.period == 3125).\
+        filter(lambda p: p.wpan.header_ie.csl.period == verify_utils.CSL_PERIOD_500MS).\
         must_next()
 
     pkts.filter_wpan_src64(DUT).\

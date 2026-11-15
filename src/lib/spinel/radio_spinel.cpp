@@ -2309,13 +2309,23 @@ void RadioSpinel::RestoreProperties(void)
         // are in queue to be sent to host (not yet processed by host RadioSpinel). Here we add some guard jump
         // when we restore the frame counter.
         // Consider the worst case: the radio/RCP continuously receives the shortest data frame and replies with the
-        // shortest enhanced ACK. The radio/RCP consumes at most 992 frame counters during the timeout time.
-        // The frame counter guard is set to 1000 which should ensure that the restored frame counter is unused.
+        // shortest enhanced ACK. The frame counter guard is set to the number of frame counters the radio/RCP can
+        // consume at most during the timeout time, plus a small margin, which should ensure that the restored frame
+        // counter is unused.
         //
         // DataFrame: 6(PhyHeader) + 2(Fcf) + 1(Seq) + 6(AddrInfo) + 6(SecHeader) + 1(Payload) + 4(Mic) + 2(Fcs) = 28
         // AckFrame : 6(PhyHeader) + 2(Fcf) + 1(Seq) + 6(AddrInfo) + 6(SecHeader) + 2(Ie) + 4(Mic) + 2(Fcs) = 29
-        // CounterGuard: 2000ms(Timeout) / [(28bytes(Data) + 29bytes(Ack)) * 32us/byte + 192us(Ifs)] = 992
-        static constexpr uint16_t kFrameCounterGuard = 1000;
+        // CounterGuard: Timeout / [(28bytes(Data) + 29bytes(Ack)) * OctetTime + 12symbols(Ifs) * SymbolTime] + Margin
+        //
+        // For the 250 kbps O-QPSK PHY this is 2000ms / (57bytes * 32us/byte + 192us) + 8 = 992 + 8 = 1000.
+        static constexpr uint32_t kMinDataFrameSize = 28;
+        static constexpr uint32_t kMinAckFrameSize  = 29;
+        static constexpr uint32_t kIfsSymbols       = 12;
+        static constexpr uint32_t kCounterMargin    = 8;
+        static constexpr uint32_t kMinExchangeTimeUs =
+            (kMinDataFrameSize + kMinAckFrameSize) * OT_RADIO_OCTET_TIME + kIfsSymbols * OT_RADIO_SYMBOL_TIME;
+        static constexpr uint32_t kFrameCounterGuard =
+            (kMaxWaitTime * OT_US_PER_MS) / kMinExchangeTimeUs + kCounterMargin;
 
         SuccessOrDie(Set(SPINEL_PROP_RCP_MAC_FRAME_COUNTER, SPINEL_DATATYPE_UINT32_S,
                          otLinkGetFrameCounter(mInstance) + kFrameCounterGuard));

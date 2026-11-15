@@ -139,9 +139,12 @@
  * Specifies the collision avoidance delay interval in milliseconds. This is added after a successful frame tx to a
  * neighbor that is expected to forward the frame (when `OPENTHREAD_CONFIG_MAC_COLLISION_AVOIDANCE_DELAY_ENABLE` is
  * enabled).
+ *
+ * Defaults to 8 msec for a 250 kbps PHY, scaled inversely with the PHY bit rate (`OT_RADIO_BIT_RATE`) so that it
+ * covers the same amount of frame airtime on any PHY.
  */
 #ifndef OPENTHREAD_CONFIG_MAC_COLLISION_AVOIDANCE_DELAY_INTERVAL
-#define OPENTHREAD_CONFIG_MAC_COLLISION_AVOIDANCE_DELAY_INTERVAL 8
+#define OPENTHREAD_CONFIG_MAC_COLLISION_AVOIDANCE_DELAY_INTERVAL ((8 * 250000) / OT_RADIO_BIT_RATE)
 #endif
 
 /**
@@ -526,22 +529,23 @@
  * @def OPENTHREAD_CONFIG_MIN_RECEIVE_ON_AHEAD
  *
  * The minimum time (in microseconds) before the MHR start that the radio should be in receive state and ready to
- * properly receive in order to properly receive any IEEE 802.15.4 frame. Defaults to the duration of SHR + PHR.
+ * properly receive in order to properly receive any IEEE 802.15.4 frame. Defaults to the duration of SHR + PHR (6
+ * octets), which is 192 microseconds for the default 250 kbps PHY.
  */
 #ifndef OPENTHREAD_CONFIG_MIN_RECEIVE_ON_AHEAD
-#define OPENTHREAD_CONFIG_MIN_RECEIVE_ON_AHEAD (6 * 32)
+#define OPENTHREAD_CONFIG_MIN_RECEIVE_ON_AHEAD (6 * OT_RADIO_OCTET_TIME)
 #endif
 
 /**
  * @def OPENTHREAD_CONFIG_MIN_RECEIVE_ON_AFTER
  *
  * The minimum time (in microseconds) after the MHR start that the radio should be in receive state in order
- * to properly receive any IEEE 802.15.4 frame. Defaults to the duration of a maximum size frame, plus AIFS,
- * plus the duration of maximum enh-ack frame. Platforms are encouraged to improve this value for energy
- * efficiency purposes.
+ * to properly receive any IEEE 802.15.4 frame. Defaults to the duration of a maximum size frame (127 octets), plus
+ * AIFS (12 symbols), plus the duration of maximum enh-ack frame (39 octets), which is 5504 microseconds for the default
+ * 250 kbps PHY. Platforms are encouraged to improve this value for energy efficiency purposes.
  */
 #ifndef OPENTHREAD_CONFIG_MIN_RECEIVE_ON_AFTER
-#define OPENTHREAD_CONFIG_MIN_RECEIVE_ON_AFTER ((127 + 6 + 39) * 32)
+#define OPENTHREAD_CONFIG_MIN_RECEIVE_ON_AFTER ((127 + 39) * OT_RADIO_OCTET_TIME + 12 * OT_RADIO_SYMBOL_TIME)
 #endif
 
 /**
@@ -578,9 +582,12 @@
  *
  * This setting specifies the timeout for receiving the Data Frame (in msec) - after an ACK with FP bit set was
  * received.
+ *
+ * Defaults to 100 msec for a 250 kbps PHY, scaled inversely with the PHY bit rate (`OT_RADIO_BIT_RATE`) so that it
+ * covers the same number of CSMA-CA backoff periods and the same amount of frame airtime on any PHY.
  */
 #ifndef OPENTHREAD_CONFIG_MAC_DATA_POLL_TIMEOUT
-#define OPENTHREAD_CONFIG_MAC_DATA_POLL_TIMEOUT 100
+#define OPENTHREAD_CONFIG_MAC_DATA_POLL_TIMEOUT ((100 * 250000) / OT_RADIO_BIT_RATE)
 #endif
 
 /**

@@ -194,7 +194,8 @@ Radio::Time64 CslTxScheduler::NeighborInfo::DetermineNextCslWindow(Radio::Time64
     //       T_pa = (CSL-Phase-Time - 192 us) (that is, CCA must be
     //       performed before time T_pa). Here, CSL-Phase-Time is the time
     //       duration specified by the CslPhase field value (in units of 10
-    //       symbol periods).
+    //       symbol periods), and 192 us is the duration of the SHR and PHR
+    //       of the 250 kbps O-QPSK PHY (it scales with the PHY bit rate).
     //     - This implies that the CSL Transmitter SHALL start transmitting
     //       the first symbol of the MAC Header at the time T_mh =
     //       CSL-Phase-Time.
@@ -208,11 +209,13 @@ Radio::Time64 CslTxScheduler::NeighborInfo::DetermineNextCslWindow(Radio::Time64
     // lastTmh = lastRxTimestamp + phrDuration
     //
     // nextTmh = lastTmh + symbolPeriod * 10 * (n * cslPeriod + cslPhase)
-    //         = lastTmh + 160us * (n * cslPeriod + cslPhase)
+    //         = lastTmh + tenSymbolsDuration * (n * cslPeriod + cslPhase)
     //
     // nextTxTimestamp
     //         = nextTmh - phrDuration
-    //         = lastRxTimestamp + 160us * (n * cslPeriod + cslPhase)
+    //         = lastRxTimestamp + tenSymbolsDuration * (n * cslPeriod + cslPhase)
+    //
+    // where tenSymbolsDuration is 160 us for the 250 kbps O-QPSK PHY.
 
     uint32_t      periodInUs    = Mac::CslPeriodToUsec(GetCslPeriod());
     Radio::Time64 firstTxWindow = GetLastRxTimestamp() + GetCslPhase() * Radio::kTenSymbolsDuration;

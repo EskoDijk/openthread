@@ -27,6 +27,8 @@
 #  POSSIBILITY OF SUCH DAMAGE.
 #
 
+import os
+
 from pktverify.addrs import Ipv6Addr
 from pktverify.bytes import Bytes
 
@@ -387,7 +389,12 @@ MAC_FRAME_TYPE_MAC_CMD = 0x3
 # CSL
 CSL_DEFAULT_PERIOD_IN_SECOND = 0.5
 CSL_DEFAULT_PERIOD = CSL_DEFAULT_PERIOD_IN_SECOND * 1000 * 1000  # in usec
-US_PER_TEN_SYMBOLS = 160
+# The PHY timing follows the build-time configuration of the OpenThread stack under test. When the stack is built with
+# a non-default `OT_RADIO_BIT_RATE` or `OT_RADIO_SYMBOLS_PER_OCTET`, set the environment variables of the same name.
+RADIO_BIT_RATE = int(os.getenv('OT_RADIO_BIT_RATE', '250000'))
+RADIO_SYMBOLS_PER_OCTET = int(os.getenv('OT_RADIO_SYMBOLS_PER_OCTET', '2'))
+RADIO_SYMBOL_RATE = RADIO_BIT_RATE * RADIO_SYMBOLS_PER_OCTET // 8
+US_PER_TEN_SYMBOLS = 10 * 1000000 // RADIO_SYMBOL_RATE
 CSL_IE_ID = 0x1a
 CSL_DEFAULT_TIMEOUT = 30
 CSL_DEFAULT_CHANNEL = 12

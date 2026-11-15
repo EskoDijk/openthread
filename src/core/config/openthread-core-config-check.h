@@ -764,4 +764,23 @@
 #error "OPENTHREAD_CONFIG_DEFAULT_WAKEUP_CHANNEL was removed (legacy thread-in-mobile)"
 #endif
 
+#if (OPENTHREAD_CONFIG_RADIO_BIT_RATE <= 0) || (OPENTHREAD_CONFIG_RADIO_SYMBOLS_PER_OCTET <= 0)
+#error "OPENTHREAD_CONFIG_RADIO_BIT_RATE and OPENTHREAD_CONFIG_RADIO_SYMBOLS_PER_OCTET MUST be greater than zero"
+#endif
+
+#if (OPENTHREAD_CONFIG_RADIO_BIT_RATE != OT_RADIO_BIT_RATE) || \
+    (OPENTHREAD_CONFIG_RADIO_SYMBOLS_PER_OCTET != OT_RADIO_SYMBOLS_PER_OCTET)
+#error "OPENTHREAD_CONFIG_RADIO_BIT_RATE and OPENTHREAD_CONFIG_RADIO_SYMBOLS_PER_OCTET MUST be defined globally "\
+       "(on the compiler command line or in OPENTHREAD_CONFIG_FILE) and not in a core config header file, so that "\
+       "the constants in `openthread/platform/radio.h` are derived from the same values."
+#endif
+
+#if ((OPENTHREAD_CONFIG_RADIO_BIT_RATE * OPENTHREAD_CONFIG_RADIO_SYMBOLS_PER_OCTET) % OT_RADIO_BITS_PER_OCTET) != 0
+#error "OPENTHREAD_CONFIG_RADIO_BIT_RATE and OPENTHREAD_CONFIG_RADIO_SYMBOLS_PER_OCTET MUST result in a symbol rate "\
+       "that is a whole number of symbols per second."
+#elif (1000000 % OT_RADIO_SYMBOL_RATE) != 0
+#error "OPENTHREAD_CONFIG_RADIO_BIT_RATE and OPENTHREAD_CONFIG_RADIO_SYMBOLS_PER_OCTET MUST result in a symbol "\
+       "duration that is a whole number of microseconds."
+#endif
+
 #endif // OT_CORE_CONFIG_OPENTHREAD_CORE_CONFIG_CHECK_H_

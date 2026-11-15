@@ -57,7 +57,14 @@
 #define SIM_HIGH_RSSI_PROB_INC_PER_CHANNEL (5)
 #define SIM_RADIO_CHANNEL_MIN OT_RADIO_2P4GHZ_OQPSK_CHANNEL_MIN
 #define SIM_RADIO_CHANNEL_MAX OT_RADIO_2P4GHZ_OQPSK_CHANNEL_MAX
-#define SIM_SCHED_TX_ACK_TIMEOUT_US (16 * OT_US_PER_MS)
+
+// Time to wait for an ACK after a scheduled TX. This is `SIM_MIN_ACK_TIMEOUT_US`, unless the PHY is slow enough that
+// the turnaround time (12 symbols) followed by a maximum-size (enhanced) ACK frame (PHY header of 6 octets and PSDU)
+// takes longer than that.
+#define SIM_MIN_ACK_TIMEOUT_US (16 * OT_US_PER_MS)
+#define SIM_MAX_ACK_DURATION_US (12 * OT_RADIO_SYMBOL_TIME + (6 + OT_RADIO_FRAME_MAX_SIZE) * OT_RADIO_OCTET_TIME)
+#define SIM_SCHED_TX_ACK_TIMEOUT_US \
+    ((SIM_MAX_ACK_DURATION_US > SIM_MIN_ACK_TIMEOUT_US) ? SIM_MAX_ACK_DURATION_US : SIM_MIN_ACK_TIMEOUT_US)
 
 //---------------------------------------------------------------------------------------------------------------------
 // Structs and types

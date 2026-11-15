@@ -140,28 +140,28 @@ public:
         void SetCslTimeout(uint32_t aTimeout) { mCslTimeout = aTimeout; }
 
         /**
-         * Returns the CSL sampled listening period in units of 10 symbols (160 microseconds).
+         * Returns the CSL sampled listening period in units of 10 symbols (`Radio::kTenSymbolsDuration` microseconds).
          *
          * @returns The CSL sampled listening period.
          */
         uint16_t GetCslPeriod(void) const { return mCslPeriod; }
 
         /**
-         * Sets the CSL sampled listening period in units of 10 symbols (160 microseconds).
+         * Sets the CSL sampled listening period in units of 10 symbols (`Radio::kTenSymbolsDuration` microseconds).
          *
          * @param[in] aPeriod  The CSL sampled listening period.
          */
         void SetCslPeriod(uint16_t aPeriod) { mCslPeriod = aPeriod; }
 
         /**
-         * Returns the CSL phase in units of 10 symbols (160 microseconds).
+         * Returns the CSL phase in units of 10 symbols (`Radio::kTenSymbolsDuration` microseconds).
          *
          * @returns The CSL phase.
          */
         uint16_t GetCslPhase(void) const { return mCslPhase; }
 
         /**
-         * Sets the CSL phase in units of 10 symbols (160 microseconds).
+         * Sets the CSL phase in units of 10 symbols (`Radio::kTenSymbolsDuration` microseconds).
          *
          * @param[in] aPhase  The CSL phase.
          */

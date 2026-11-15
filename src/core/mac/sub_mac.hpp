@@ -537,21 +537,30 @@ private:
     //------------------------------------------------------------------------------------------------------------------
     // Constants
 
-    static constexpr uint8_t  kCsmaMinBe         = 3;                  // macMinBE (IEEE 802.15.4-2006).
-    static constexpr uint8_t  kCsmaMaxBe         = 5;                  // macMaxBE (IEEE 802.15.4-2006).
-    static constexpr uint32_t kUnitBackoffPeriod = 20;                 // Number of symbols (IEEE 802.15.4-2006).
-    static constexpr uint32_t kAckTimeout = 16 * Time::kOneMsecInUsec; // Timeout for waiting on an ACK (in usec).
-    static constexpr uint32_t kCcaSampleInterval = 128;                // CCA sample interval, 128 usec.
+    static constexpr uint8_t  kCsmaMinBe         = 3;                   // macMinBE (IEEE 802.15.4-2006).
+    static constexpr uint8_t  kCsmaMaxBe         = 5;                   // macMaxBE (IEEE 802.15.4-2006).
+    static constexpr uint32_t kUnitBackoffPeriod = 20;                  // Number of symbols (IEEE 802.15.4-2006).
+    static constexpr uint32_t kCcaSampleInterval = Radio::kCcaDuration; // CCA sample interval (in usec).
+
+    // Timeout for waiting on an ACK (in usec). This is `kMinAckTimeout`,
+    // unless the PHY is slow enough that the turnaround time followed
+    // by a maximum-size (enhanced) ACK frame takes longer than that.
+    static constexpr uint32_t kMinAckTimeout  = 16 * Time::kOneMsecInUsec;
+    static constexpr uint32_t kMaxAckDuration = Radio::kTurnaroundTime + Radio::kHeaderShrDuration +
+                                                Radio::kHeaderPhrDuration + Radio::kFrameMaxSize * Radio::kPhyUsPerByte;
+    static constexpr uint32_t kAckTimeout = (kMaxAckDuration > kMinAckTimeout) ? kMaxAckDuration : kMinAckTimeout;
 
 #if OPENTHREAD_CONFIG_MAC_ADD_DELAY_ON_NO_ACK_ERROR_BEFORE_RETRY
     static constexpr uint8_t kRetxDelayMinBackoffExponent = OPENTHREAD_CONFIG_MAC_RETX_DELAY_MIN_BACKOFF_EXPONENT;
     static constexpr uint8_t kRetxDelayMaxBackoffExponent = OPENTHREAD_CONFIG_MAC_RETX_DELAY_MAX_BACKOFF_EXPONENT;
 #endif
 
+    // RSSI sample interval for energy scan, in usec. With a microsecond
+    // timer, it is the energy detection measurement time of 8 symbols.
 #if OPENTHREAD_CONFIG_PLATFORM_USEC_TIMER_ENABLE
-    static constexpr uint32_t kEnergyScanRssiSampleInterval = 128; // RSSI sample interval for energy scan, in usec
+    static constexpr uint32_t kEnergyScanRssiSampleInterval = 8 * Radio::kSymbolTime;
 #else
-    static constexpr uint32_t kEnergyScanRssiSampleInterval = 1000; // RSSI sample interval for energy scan, in usec
+    static constexpr uint32_t kEnergyScanRssiSampleInterval = 1000;
 #endif
 
     static constexpr Capability kCapAckTimeout         = Radio::kCapAckTimeout;
