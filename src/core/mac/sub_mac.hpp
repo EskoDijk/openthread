@@ -545,7 +545,7 @@ private:
     // Timeout for waiting on an ACK (in usec). This is `kMinAckTimeout`,
     // unless the PHY is slow enough that the turnaround time followed
     // by a maximum-size (enhanced) ACK frame takes longer than that.
-    static constexpr uint32_t kMinAckTimeout  = 16 * Time::kOneMsecInUsec;
+    static constexpr uint32_t kMinAckTimeout  = ((16 * 250000) / OT_RADIO_BIT_RATE) * Time::kOneMsecInUsec;
     static constexpr uint32_t kMaxAckDuration = Radio::kTurnaroundTime + Radio::kHeaderShrDuration +
                                                 Radio::kHeaderPhrDuration + Radio::kFrameMaxSize * Radio::kPhyUsPerByte;
     static constexpr uint32_t kAckTimeout = (kMaxAckDuration > kMinAckTimeout) ? kMaxAckDuration : kMinAckTimeout;
