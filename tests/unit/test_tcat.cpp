@@ -530,6 +530,12 @@ void TestTcatConnectionAndCertAttributes(void)
                                                                   &attributeBuffer[0], &attributeLen));
     VerifyOrQuit(attributeLen == 1 && attributeBuffer[0] >= kThreadVersion1p4);
 
+    // Test that only the length of an attribute is read when no buffer is given, ignoring the input length.
+    attributeLen = 0;
+    SuccessOrQuit(otBleSecureGetThreadAttributeFromOwnCertificate(instance, kCertificateAuthorizationField, nullptr,
+                                                                  &attributeLen));
+    VerifyOrQuit(attributeLen == sizeof(kDeviceCert1AuthField));
+
     static_assert(5 == sizeof(kDeviceCert1AuthField), "expectedTcatAuthField size incorrect for test");
     attributeLen = 5;
     SuccessOrQuit(otBleSecureGetThreadAttributeFromOwnCertificate(instance, kCertificateAuthorizationField,

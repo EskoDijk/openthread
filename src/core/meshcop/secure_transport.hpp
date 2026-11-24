@@ -507,8 +507,12 @@ public:
          * The attribute length is set if the attribute was successfully read or zero if unsuccessful.
          * Requires a connection to be active.
          *
+         * If @p aAttributeBuffer is NULL, the attribute is not read: only its length is set in @p aAttributeLength, and
+         * the input value of @p aAttributeLength is ignored. This can be used to determine the buffer size that is
+         * needed to read the attribute.
+         *
          * @param[in]      aThreadOidDescriptor  The last digit of the Thread attribute OID.
-         * @param[out]     aAttributeBuffer      A pointer to the attribute buffer.
+         * @param[out]     aAttributeBuffer      A pointer to the attribute buffer, or NULL to get only the length.
          * @param[in,out]  aAttributeLength      On input, the size the max size of @p aAttributeBuffer.
          *                                           On output, the length of the attribute written to the buffer.
          *
@@ -531,8 +535,12 @@ public:
          * The attribute length is set if the attribute was successfully read or zero if unsuccessful.
          * Requires a connection to be active.
          *
+         * If @p aAttributeBuffer is NULL, the attribute is not read: only its length is set in @p aAttributeLength, and
+         * the input value of @p aAttributeLength is ignored. This can be used to determine the buffer size that is
+         * needed to read the attribute.
+         *
          * @param[in]      aThreadOidDescriptor  The last digit of the Thread attribute OID.
-         * @param[out]     aAttributeBuffer      A pointer to the attribute buffer.
+         * @param[out]     aAttributeBuffer      A pointer to the attribute buffer, or NULL to get only the length.
          * @param[in,out]  aAttributeLength      On input, the size the max size of @p aAttributeBuffer.
          *                                       On output, the length of the attribute written to the buffer.
          *
