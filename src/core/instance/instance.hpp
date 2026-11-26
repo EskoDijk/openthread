@@ -102,6 +102,7 @@
 #include "meshcop/meshcop_leader.hpp"
 #include "meshcop/network_identity.hpp"
 #include "meshcop/seeker.hpp"
+#include "meshcop/tcat_coaps_server.hpp"
 #include "net/dhcp6_client.hpp"
 #include "net/dhcp6_server.hpp"
 #include "net/dhcp6_types.hpp"
@@ -838,6 +839,10 @@ private:
     MeshCoP::TcatAgent mTcatAgent;
 #endif
 
+#if OPENTHREAD_CONFIG_TCAT_COAPS_ENABLE
+    MeshCoP::TcatCoapServer mTcatCoapServer;
+#endif
+
 #if OPENTHREAD_CONFIG_PING_SENDER_ENABLE
     Utils::PingSender mPingSender;
 #endif
@@ -1324,6 +1329,10 @@ template <> inline Ble::BleSecure &Instance::Get(void) { return mBleSecure; }
 
 #if OPENTHREAD_CONFIG_TCAT_ENABLE
 template <> inline MeshCoP::TcatAgent &Instance::Get(void) { return mTcatAgent; }
+#endif
+
+#if OPENTHREAD_CONFIG_TCAT_COAPS_ENABLE
+template <> inline MeshCoP::TcatCoapServer &Instance::Get(void) { return mTcatCoapServer; }
 #endif
 
 #endif // OPENTHREAD_MTD || OPENTHREAD_FTD

@@ -567,6 +567,19 @@ public:
         {
         }
 
+#ifdef MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
+        /**
+         * Selects the "ECDHE ECDSA with AES 128 GCM SHA256" cipher suite for use with a certificate, also on a
+         * datagram (DTLS) transport.
+         *
+         * By default a datagram transport uses "ECDHE ECDSA with AES 128 CCM 8" and a stream (TLS) transport uses
+         * "ECDHE ECDSA with AES 128 GCM SHA256".
+         *
+         * Must be called before `SetCertificate()`.
+         */
+        void SetUseAesGcmCipherSuite(void) { mEcdheEcdsaInfo.mUseAesGcm = true; }
+#endif
+
     private:
 #if defined(MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED)
         struct EcdheEcdsaInfo : public Clearable<EcdheEcdsaInfo>
@@ -582,6 +595,7 @@ public:
             uint32_t           mOwnCertLength;
             uint32_t           mCaChainLength;
             uint32_t           mPrivateKeyLength;
+            bool               mUseAesGcm;
             mbedtls_x509_crt   mCaChain;
             mbedtls_x509_crt   mOwnCert;
             mbedtls_pk_context mPrivateKey;
@@ -911,6 +925,12 @@ public:
             : SecureTransport(aInstance, aLayerTwoSecurity, /* aDatagramTransport */ true)
         {
         }
+
+#if OPENTHREAD_CONFIG_TLS_API_ENABLE
+        // Promotes the protected SetExtension to public so callers that hold a
+        // Dtls::Transport directly (e.g. TcatCoapServer) can associate an Extension.
+        using SecureTransport::SetExtension;
+#endif
     };
 
     /**

@@ -189,6 +189,7 @@ set(COMMON_SOURCES
     meshcop/seeker.cpp
     meshcop/steering_data.cpp
     meshcop/tcat_agent.cpp
+    meshcop/tcat_coaps_server.cpp
     meshcop/timestamp.cpp
     net/checksum.cpp
     net/dhcp6_client.cpp

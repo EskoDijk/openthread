@@ -45,7 +45,14 @@
 
 using namespace ot;
 
+#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
 static Ble::BleSecure &GetTcatTransport(otInstance *aInstance) { return AsCoreType(aInstance).Get<Ble::BleSecure>(); }
+#else
+static MeshCoP::TcatCoapServer &GetTcatTransport(otInstance *aInstance)
+{
+    return AsCoreType(aInstance).Get<MeshCoP::TcatCoapServer>();
+}
+#endif
 
 otError otTcatSetVendorInfo(otInstance *aInstance, const otTcatVendorInfo *aVendorInfo)
 {
@@ -82,7 +89,9 @@ otError otTcatStart(otInstance                        *aInstance,
                     otHandleTcatApplicationDataReceive aAppDataHandler,
                     otHandleTcatJoin                   aJoinHandler)
 {
-    Error           error;
+    Error error;
+
+#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
     Ble::BleSecure &bleSecure = GetTcatTransport(aInstance);
 
     OT_UNUSED_VARIABLE(aUdpPort);
@@ -92,6 +101,10 @@ otError otTcatStart(otInstance                        *aInstance,
     error = bleSecure.TcatStart(aJoinHandler);
 
 exit:
+#else
+    error = GetTcatTransport(aInstance).Start(aUdpPort, aAppDataHandler, aJoinHandler);
+#endif
+
     return error;
 }
 

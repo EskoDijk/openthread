@@ -68,11 +68,13 @@ class BleSecure;
 
 namespace MeshCoP {
 
+class TcatCoapServer;
 class UnitTester;
 
 class TcatAgent : public InstanceLocator, private NonCopyable
 {
     friend class Ble::BleSecure;
+    friend class TcatCoapServer;
     friend class UnitTester;
     friend class ot::Notifier;
 

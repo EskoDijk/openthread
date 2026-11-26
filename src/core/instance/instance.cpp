@@ -262,6 +262,9 @@ Instance::Instance(void)
 #if OPENTHREAD_CONFIG_TCAT_ENABLE
     , mTcatAgent(*this)
 #endif
+#if OPENTHREAD_CONFIG_TCAT_COAPS_ENABLE
+    , mTcatCoapServer(*this)
+#endif
 #if OPENTHREAD_CONFIG_PING_SENDER_ENABLE
     , mPingSender(*this)
 #endif

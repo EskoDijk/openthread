@@ -1208,8 +1208,9 @@ void SecureTransport::Extension::SetCertificate(const uint8_t *aX509Certificate,
     mEcdheEcdsaInfo.mPrivateKeySrc    = aPrivateKey;
     mEcdheEcdsaInfo.mPrivateKeyLength = aPrivateKeyLength;
 
-    mSecureTransport.mCipherSuite =
-        mSecureTransport.mDatagramTransport ? kEcdheEcdsaWithAes128Ccm8 : kEcdheEcdsaWithAes128GcmSha256;
+    mSecureTransport.mCipherSuite = (mSecureTransport.mDatagramTransport && !mEcdheEcdsaInfo.mUseAesGcm)
+                                        ? kEcdheEcdsaWithAes128Ccm8
+                                        : kEcdheEcdsaWithAes128GcmSha256;
 }
 
 void SecureTransport::Extension::SetCaCertificateChain(const uint8_t *aX509CaCertificateChain,

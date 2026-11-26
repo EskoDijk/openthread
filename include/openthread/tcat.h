@@ -428,6 +428,10 @@ otError otTcatSetAgentState(otInstance *aInstance, bool aActive, uint32_t aDelay
 /**
  * Sends a TCAT application TLV to the connected TCAT Commissioner.
  *
+ * For the TCAT over CoAPS transport, this function can only be called from within the
+ * #otHandleTcatApplicationDataReceive callback: the TLV is then added to the response to the TCAT Commissioner's
+ * request that is being handled.
+ *
  * @param[in] aInstance             A pointer to an OpenThread instance.
  * @param[in] aApplicationProtocol  The application protocol (TLV type) of the TLV to send.
  * @param[in] aBuf                  A pointer to the TLV value.
@@ -435,7 +439,7 @@ otError otTcatSetAgentState(otInstance *aInstance, bool aActive, uint32_t aDelay
  *
  * @retval OT_ERROR_NONE           Successfully enqueued the TLV for sending.
  * @retval OT_ERROR_NO_BUFS        Failed to allocate buffer memory.
- * @retval OT_ERROR_INVALID_STATE  No TCAT Commissioner is connected.
+ * @retval OT_ERROR_INVALID_STATE  No TCAT Commissioner is connected, or no response is being composed.
  * @retval OT_ERROR_REJECTED       The application protocol is a response with data or status, but no response is
  *                                 pending.
  */
