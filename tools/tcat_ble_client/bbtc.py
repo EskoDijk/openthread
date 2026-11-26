@@ -34,13 +34,14 @@ from bleak import BLEDevice
 
 from ble.ble_stream import BleConnectionClosed
 from ble.ble_stream_secure import BleStreamSecure
+from ble.coaps_stream import CoapsStream
 from ble.udp_stream import UdpStream
 from ble import ble_scanner
 from cli.cli import CLI
 from cli.base_commands import connection_closed_helper, disconnect_helper
 from dataset.dataset import ThreadDataset
 from cli.command import CommandResult
-from constants import EVENT_POLL_INTERVAL_SEC, SIMULATION_HOST
+from constants import EVENT_POLL_INTERVAL_SEC, SIMULATION_HOST, TCAT_COAPS_DEFAULT_PORT
 from tlv.tcat_tlv import TcatTLVType
 from tlv.tlv import TLV
 from utils import hexdump_ot, select_device_by_user_input, quit_with_reason
@@ -58,11 +59,26 @@ async def main():
     parser.add_argument('--debug', help='Enable debug logs', action='store_true')
     parser.add_argument('--info', help='Enable info logs', action='store_true')
     parser.add_argument('--cert_path', help='Path to certificate chain and key', action='store', default='auth')
+    parser.add_argument('--interface',
+                        type=str,
+                        default='',
+                        metavar='IFACE',
+                        help='Network interface to reach a link-local IPv6 address given with --coaps (e.g. wpan0)')
+    parser.add_argument('--port',
+                        type=int,
+                        default=TCAT_COAPS_DEFAULT_PORT,
+                        metavar='PORT',
+                        help=f'UDP port of the TCAT Device for --coaps (default {TCAT_COAPS_DEFAULT_PORT})')
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--mac', type=str, help='Device MAC address', action='store')
     group.add_argument('--name', type=str, help='Device name', action='store')
     group.add_argument('--scan', help='Scan all available devices', action='store_true')
     group.add_argument('--simulation', help='Connect to simulation node id', action='store')
+    group.add_argument('--coaps',
+                       type=str,
+                       metavar='ADDRESS',
+                       help='Connect over CoAPS (CoAP/DTLS/UDP) to the IPv6 address of a TCAT Device',
+                       action='store')
     args = parser.parse_args()
 
     if args.debug:
@@ -158,7 +174,7 @@ def validate_unsolicited_tlv(tlv: TLV):
         logger.error(f"Error: Illegal unsolicited TLV type sent by TCAT Device: {hex(tlv.type)}")
 
 
-async def get_device_by_args(args) -> BLEDevice | UdpStream | None:
+async def get_device_by_args(args) -> BLEDevice | UdpStream | CoapsStream | None:
     device = None
     if args.mac:
         device = await ble_scanner.find_first_by_mac(args.mac)
@@ -169,6 +185,8 @@ async def get_device_by_args(args) -> BLEDevice | UdpStream | None:
         device = select_device_by_user_input(tcat_devices)
     elif args.simulation:
         device = UdpStream(SIMULATION_HOST, int(args.simulation))
+    elif args.coaps:
+        device = CoapsStream(args.coaps, args.port, args.interface)
 
     return device
 

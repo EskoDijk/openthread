@@ -33,6 +33,8 @@ TLS_BUFFER_SIZE = 4096  # max bytes read from / written to the TLS and BLE/UDP l
 TLS_HANDSHAKE_TIMEOUT_BLE_SEC = 30.0  # TLS handshake with a real TCAT Device over BLE
 TLS_HANDSHAKE_TIMEOUT_SIMULATION_SEC = 5.0  # TLS handshake with a simulated TCAT Device over UDP
 TLS_CLOSE_TIMEOUT_SEC = 5.0  # graceful TLS close (close-notify exchange)
+DTLS_HANDSHAKE_TIMEOUT_SEC = 10.0  # DTLS handshake with a TCAT Device over CoAPS
+DTLS_MAX_DATAGRAM_SIZE = 768  # max bytes of a DTLS datagram sent to a TCAT Device: fits its smallest record buffer
 TCAT_RESPONSE_TIMEOUT_SEC = 5.0  # waiting for the response to a TCAT command
 BLE_RX_QUIET_TIME_SEC = 0.200  # BLE data counts as complete after no new notification for this long
 
@@ -42,3 +44,6 @@ EVENT_POLL_INTERVAL_SEC = 0.100  # background receive loop interval for unsolici
 
 # Simulation
 SIMULATION_HOST = '127.0.0.1'  # host of the simulated TCAT Device (UDP)
+
+# TCAT over CoAPS
+TCAT_COAPS_DEFAULT_PORT = 5684  # UDP port on which a TCAT Device hosts its CoAPS server

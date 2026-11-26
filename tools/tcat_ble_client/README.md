@@ -75,6 +75,31 @@ The `auth-cert` directory contains some other identities too, for testing purpos
 
 See [GENERATING_CERTIFICATES.md](GENERATING_CERTIFICATES.md) for details on generating own certificates.
 
+## Usage with TCAT over CoAPS
+
+> Note: TCAT over CoAPS is experimental.
+
+A TCAT Device that is built with the `OT_TCAT_COAPS` option hosts TCAT over CoAPS (CoAP over DTLS over UDP) on its Thread radio interface, instead of over BLE. The TCAT Commissioner connects to the link-local IPv6 address of such a device, using UDP messages that are sent without link-layer security.
+
+This requires a network interface to the Thread radio link on the computer that runs the TCAT Commissioner, for example the `wpan0` interface that is created by `ot-daemon` with an RCP. This interface must use the same channel and PAN ID as the TCAT Device and must allow link-layer unsecured communication on the TCAT UDP port (5684 by default), while Thread itself remains disabled:
+
+```bash
+sudo ot-ctl channel 11
+sudo ot-ctl panid 0xface
+sudo ot-ctl ifconfig up
+sudo ot-ctl unsecureport add 5684
+```
+
+Then connect to the TCAT Device using its link-local address and the name of the network interface:
+
+```bash
+poetry run python3 bbtc.py --coaps fe80::c0eb:eca9:13b4:3221 --interface wpan0
+```
+
+Use `--port <PORT>` if the TCAT Device hosts TCAT on another UDP port. After the `disconnect` command, the `simulation 1` command connects to the same TCAT Device again. Each TCAT command and its response need to fit in a single CoAP message, and the TCAT Device cannot send unsolicited events to the TCAT Commissioner.
+
+To decrypt a packet capture of the DTLS session, for example in Wireshark, set the `SSLKEYLOGFILE` environment variable to the name of a file. The TCAT Commissioner then appends the secrets of each DTLS session to this file.
+
 ## TCAT Commissioner CLI Commands
 
 The application supports the following interactive CLI commands:

@@ -40,8 +40,10 @@ from ble.ble_connection_constants import BBTC_SERVICE_UUID, BBTC_TX_CHAR_UUID, B
 from ble.ble_stream import BleStream
 from ble.ble_stream_secure import BleStreamSecure
 from ble import ble_scanner
+from ble.coaps_stream import CoapsStream
 from ble.udp_stream import UdpStream
 from constants import (
+    DTLS_HANDSHAKE_TIMEOUT_SEC,
     SIMULATION_HOST,
     TLS_CLOSE_TIMEOUT_SEC,
     TLS_HANDSHAKE_TIMEOUT_BLE_SEC,
@@ -448,20 +450,22 @@ def _handshake_progress_bar(is_concluded: bool):
         print('.', end='', flush=True)
 
 
-async def connect_helper(device: BLEDevice | UdpStream,
+async def connect_helper(device: BLEDevice | UdpStream | CoapsStream,
                          context: dict,
                          timeout_ble=TLS_HANDSHAKE_TIMEOUT_BLE_SEC,
-                         timeout_simulation=TLS_HANDSHAKE_TIMEOUT_SIMULATION_SEC) -> bool:
+                         timeout_simulation=TLS_HANDSHAKE_TIMEOUT_SIMULATION_SEC,
+                         timeout_coaps=DTLS_HANDSHAKE_TIMEOUT_SEC) -> bool:
     """Helper function for CLI and commands to establish a new secure connection with a TCAT device.
 
-    Handles both BLE and simulated UDP connections. Loads certificates and performs handshake
+    Handles BLE, simulated UDP and CoAPS connections. Loads certificates and performs handshake
     to establish a secure channel. Connection objects are stored in the context dictionary.
 
     Args:
-        device: BLEDevice object, or UdpStream (for simulation)
+        device: BLEDevice object, UdpStream (for simulation), or CoapsStream (for TCAT over CoAPS)
         context: Dictionary containing application context including command line arguments
         timeout_ble: Timeout in seconds for handshake with real TCAT device
         timeout_simulation: Timeout in seconds for handshake for simulated TCAT device
+        timeout_coaps: Timeout in seconds for DTLS handshake with a TCAT device over CoAPS
 
     Returns:
         True if connection was successful, False otherwise.
@@ -470,14 +474,28 @@ async def connect_helper(device: BLEDevice | UdpStream,
         Exception: If certificates cannot be loaded
     """
     is_simulation = isinstance(device, UdpStream)
+    is_coaps = isinstance(device, CoapsStream)
     is_debug = logger.getEffectiveLevel() <= logging.DEBUG
 
-    print(f'Connecting to {device}')
-    if not is_simulation:
-        ble_stream = await BleStream.create(device.address, BBTC_SERVICE_UUID, BBTC_TX_CHAR_UUID, BBTC_RX_CHAR_UUID)
+    if is_coaps:
+        timeout = timeout_coaps
+    elif is_simulation:
+        timeout = timeout_simulation
     else:
+        timeout = timeout_ble
+
+    print(f'Connecting to {device}')
+    if is_coaps:
+        # A CoapsStream is both the (UDP) link and the secure (DTLS) stream on top of it.
         ble_stream = device
-    ble_sstream = BleStreamSecure(ble_stream)
+        ble_sstream = device
+    else:
+        if not is_simulation:
+            ble_stream = await BleStream.create(device.address, BBTC_SERVICE_UUID, BBTC_TX_CHAR_UUID,
+                                                BBTC_RX_CHAR_UUID)
+        else:
+            ble_stream = device
+        ble_sstream = BleStreamSecure(ble_stream)
 
     cert_path = context['cmd_args'].cert_path if context['cmd_args'] else 'auth'
     try:
@@ -497,8 +515,7 @@ async def connect_helper(device: BLEDevice | UdpStream,
         cb = None
         if not is_debug:
             cb = _handshake_progress_bar
-        ok = await ble_sstream.do_handshake(progress_callback=cb,
-                                            timeout=timeout_simulation if is_simulation else timeout_ble)
+        ok = await ble_sstream.do_handshake(progress_callback=cb, timeout=timeout)
     except Exception as e:
         logger.error(e)
 
@@ -582,15 +599,22 @@ class ScanCommand(Command):
 class SimulationCommand(Command):
 
     def get_help_string(self) -> str:
-        return 'Connect to a simulated TCAT device over UDP.'
+        return ('Connect to a simulated TCAT device over UDP. When started with --coaps: connect (again) to the '
+                'TCAT device over CoAPS.')
 
     async def execute_default(self, args, context) -> CommandResult:
-        if len(args) != 1:
+        cmd_args = context['cmd_args']
+        is_coaps = cmd_args is not None and bool(getattr(cmd_args, 'coaps', None))
+        if len(args) != 1 and not is_coaps:
             return CommandResultError('need index number of simulated TCAT device as first argument.')
         if context['ble_sstream'] is not None and context['ble_sstream'].is_connected:
             return CommandResultError('already connected to a TCAT device. Use \'disconnect\' first.')
 
-        device = UdpStream(SIMULATION_HOST, int(args[0]))
+        if is_coaps:
+            # The TCAT device is identified by the --coaps address: the index number is not used.
+            device = CoapsStream(cmd_args.coaps, cmd_args.port, cmd_args.interface)
+        else:
+            device = UdpStream(SIMULATION_HOST, int(args[0]))
         await connect_helper(device, context)
         return CommandResultNone()
 
