@@ -831,7 +831,10 @@ private:
 #endif
 
 #if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
-    Ble::BleSecure     mBleSecure;
+    Ble::BleSecure mBleSecure;
+#endif
+
+#if OPENTHREAD_CONFIG_TCAT_ENABLE
     MeshCoP::TcatAgent mTcatAgent;
 #endif
 
@@ -1316,7 +1319,10 @@ template <> inline Coap::ApplicationCoapSecure &Instance::Get(void) { return mAp
 #endif
 
 #if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
-template <> inline Ble::BleSecure     &Instance::Get(void) { return mBleSecure; }
+template <> inline Ble::BleSecure &Instance::Get(void) { return mBleSecure; }
+#endif
+
+#if OPENTHREAD_CONFIG_TCAT_ENABLE
 template <> inline MeshCoP::TcatAgent &Instance::Get(void) { return mTcatAgent; }
 #endif
 

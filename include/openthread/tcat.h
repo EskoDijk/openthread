@@ -32,7 +32,7 @@
  *  This file defines the top-level functions for the OpenThread TCAT.
  *
  *  @note
- *   The functions in this module require the build-time feature `OPENTHREAD_CONFIG_BLE_TCAT_ENABLE=1`.
+ *   The functions in this module require the build-time feature `OPENTHREAD_CONFIG_TCAT_ENABLE=1`.
  *
  *  @note
  *   To enable the required cipher suite TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
@@ -60,7 +60,7 @@ extern "C" {
  *   This module includes functions that implement TCAT communication.
  *
  *   The functions in this module are available when TCAT feature
- *   (`OPENTHREAD_CONFIG_BLE_TCAT_ENABLE`) is enabled.
+ *   (`OPENTHREAD_CONFIG_TCAT_ENABLE`) is enabled.
  *
  * @{
  */

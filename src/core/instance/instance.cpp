@@ -258,6 +258,8 @@ Instance::Instance(void)
 #endif
 #if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
     , mBleSecure(*this)
+#endif
+#if OPENTHREAD_CONFIG_TCAT_ENABLE
     , mTcatAgent(*this)
 #endif
 #if OPENTHREAD_CONFIG_PING_SENDER_ENABLE

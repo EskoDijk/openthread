@@ -33,13 +33,17 @@
 
 #include "tcat_agent.hpp"
 
-#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#if OPENTHREAD_CONFIG_TCAT_ENABLE
 
 #include "common/code_utils.hpp"
 #include "common/error.hpp"
 #include "crypto/storage.hpp"
 #include "instance/instance.hpp"
 #include "thread/net_diag.hpp"
+
+#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#include <openthread/platform/ble.h>
+#endif
 
 namespace ot {
 namespace MeshCoP {
@@ -79,6 +83,7 @@ exit:
 TcatAgent::TcatAgent(Instance &aInstance)
     : InstanceLocator(aInstance)
     , mVendorInfo(nullptr)
+    , mActiveExtension(nullptr)
     , mState(kStateDisabled)
     , mNextState(kStateDisabled)
     , mTimerSetsToActive(false)
@@ -213,13 +218,14 @@ exit:
     return error;
 }
 
-Error TcatAgent::Connected(MeshCoP::Tls::Extension &aTls)
+Error TcatAgent::Connected(SecureTransport::Extension &aTls)
 {
     size_t len;
     Error  error;
 
     VerifyOrExit(IsStarted() && !IsConnected() && mState != kStateStandby && mState != kStateStandbyTemporary,
                  error = kErrorInvalidState);
+    mActiveExtension = &aTls;
     ClearCommissionerState();
 
     len = sizeof(mCommissionerAuthorizationField);
@@ -278,7 +284,8 @@ void TcatAgent::Disconnected(void)
 {
     if (mState != kStateDisabled)
     {
-        mState = mNextState;
+        mActiveExtension = nullptr;
+        mState           = mNextState;
         LogInfo("Disconnected");
         NotifyStateChange();
         ClearCommissionerState();
@@ -618,7 +625,8 @@ Error TcatAgent::HandleSetActiveOperationalDataset(const Message &aIncomingMessa
 
     VerifyOrExit(IsSetActiveDatasetAuthorized(&dataset), error = kErrorRejected);
 
-    SuccessOrExit(error = Get<Ble::BleSecure>().GetPeerCertificateDer(buf, &bufLen, bufLen));
+    VerifyOrExit(mActiveExtension != nullptr, error = kErrorInvalidState);
+    SuccessOrExit(error = mActiveExtension->GetPeerCertificateDer(buf, &bufLen, bufLen));
     Get<Settings>().SaveTcatCommissionerCertificate(buf, static_cast<uint16_t>(bufLen));
 
     Get<ActiveDatasetManager>().SaveLocal(dataset);
@@ -719,7 +727,8 @@ Error TcatAgent::HandleDecommission(void)
     size_t        bufLen = sizeof(buf);
 
     VerifyOrExit(IsCommandClassAuthorized(kDecommissioning), error = kErrorRejected);
-    SuccessOrExit(error = Get<Ble::BleSecure>().GetPeerCertificateDer(buf, &bufLen, bufLen));
+    VerifyOrExit(mActiveExtension != nullptr, error = kErrorInvalidState);
+    SuccessOrExit(error = mActiveExtension->GetPeerCertificateDer(buf, &bufLen, bufLen));
 
     Decommission(buf, static_cast<uint16_t>(bufLen));
 
@@ -949,7 +958,8 @@ exit:
 
 Error TcatAgent::CalculateHash(uint64_t aChallenge, const char *aBuf, size_t aBufLen, Crypto::HmacSha256::Hash &aHash)
 {
-    const mbedtls_asn1_buf &rawKey = Get<Ble::BleSecure>().GetOwnPublicKey();
+    OT_ASSERT(mActiveExtension != nullptr);
+    const mbedtls_asn1_buf &rawKey = mActiveExtension->GetOwnPublicKey();
     Crypto::Key             cryptoKey;
     Crypto::HmacSha256      hmac;
     Error                   error = kErrorNone;
@@ -1129,7 +1139,7 @@ void TcatAgent::HandleTimer(void)
 // internally called when TcatAgent state changes: perform any required actions.
 void TcatAgent::NotifyStateChange(void)
 {
-    Get<Ble::BleSecure>().NotifySendAdvertisements(mState == kStateActive || mState == kStateActiveTemporary);
+    mStateChangeCallback.InvokeIfSet(mState == kStateActive || mState == kStateActiveTemporary);
 }
 
 void TcatAgent::HandleNotifierEvents(Events aEvents)
@@ -1241,6 +1251,7 @@ exit:
     return;
 }
 
+#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
 void SerializeTcatAdvertisementTlv(uint8_t                 *aBuffer,
                                    uint16_t                &aOffset,
                                    TcatAdvertisementTlvType aType,
@@ -1342,8 +1353,9 @@ Error TcatAgent::GetAdvertisementData(uint16_t &aLen, uint8_t *aAdvertisementDat
 exit:
     return error;
 }
+#endif // OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
 
 } // namespace MeshCoP
 } // namespace ot
 
-#endif // OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#endif // OPENTHREAD_CONFIG_TCAT_ENABLE

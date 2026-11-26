@@ -588,6 +588,19 @@
 #endif
 
 /**
+ * @def OPENTHREAD_CONFIG_TCAT_ENABLE
+ *
+ * Indicates whether TCAT is enabled, using any of the TCAT transports.
+ *
+ * This is a derived configuration that must not be defined directly. Use the configuration of a specific TCAT
+ * transport instead, i.e. `OPENTHREAD_CONFIG_BLE_TCAT_ENABLE`.
+ */
+#ifdef OPENTHREAD_CONFIG_TCAT_ENABLE
+#error "OPENTHREAD_CONFIG_TCAT_ENABLE must not be defined directly, it is derived from the TCAT transport configs."
+#endif
+#define OPENTHREAD_CONFIG_TCAT_ENABLE OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+
+/**
  * @def OPENTHREAD_CONFIG_PLATFORM_LOG_CRASH_DUMP_ENABLE
  *
  * Define to 1 to enable crash dump logging.

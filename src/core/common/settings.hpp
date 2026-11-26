@@ -872,7 +872,7 @@ public:
      */
     void DeleteOperationalDataset(MeshCoP::Dataset::Type aType);
 
-#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#if OPENTHREAD_CONFIG_TCAT_ENABLE
     /**
      * Stores the Tcat Commissioner certificate.
      *
@@ -894,7 +894,7 @@ public:
      * @retval kErrorNoBufs     Buffer has not enough space to store the data.
      */
     Error ReadTcatCommissionerCertificate(uint8_t *aCert, uint16_t &aCertLen) const;
-#endif // OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#endif // OPENTHREAD_CONFIG_TCAT_ENABLE
 
     /**
      * Reads a specified settings entry.
