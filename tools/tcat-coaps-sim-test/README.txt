@@ -138,7 +138,8 @@ When the test has ended, open the capture together with the key log file:
 The key log file can also be set in the Wireshark preferences, under Protocols,
 TLS, "(Pre)-Master-Secret log filename". This TLS setting is used for DTLS too.
 Wireshark then shows the CoAP requests to the resource /c/tc and their
-responses, with the TCAT TLVs as CoAP payload.
+responses, with the TCAT TLVs as CoAP payload. To see the TCAT TLVs dissected
+as well, install the Wireshark plugin of tools/tcat-wireshark-dissector.
 
 The file is appended to, never truncated: delete it yourself now and then. It
 only holds secrets of the sessions of these test runs.
