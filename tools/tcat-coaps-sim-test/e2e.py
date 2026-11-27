@@ -27,8 +27,8 @@
 #  POSSIBILITY OF SUCH DAMAGE.
 #
 """
-End-to-end simulation test of TCAT over CoAPS. To be started by run.sh, which sets up the namespaces that this
-needs. See README.txt.
+End-to-end test of TCAT over CoAPS, in simulation or with real hardware. To be started by run.sh, which sets up the
+namespaces that this needs. See README.txt.
 """
 
 import atexit
@@ -36,8 +36,10 @@ import os
 import shutil
 import subprocess
 import sys
+import termios
 import threading
 import time
+import tty
 
 REPO_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 COMMISSIONER_DIR = REPO_DIR + '/tools/tcat_ble_client'
@@ -47,6 +49,10 @@ VENV = os.environ['VENV']
 PANID = os.environ.get('PANID', '0xface')
 CHANNEL = os.environ.get('CHANNEL', '11')
 PCAP = os.environ.get('PCAP')
+
+# Hardware mode: the serial ports of a real RCP and of the CLI of a real TCAT Device
+RCP_PORT = os.environ.get('RCP_PORT')
+DEVICE_PORT = os.environ.get('DEV_PORT')
 
 DEVICE_BIN = os.environ.get('DEV_BIN', BUILD_DIR + '/sim-coaps/examples/apps/cli/ot-cli-ftd')
 RCP_BIN = BUILD_DIR + '/sim-coaps/examples/apps/ncp/ot-rcp'
@@ -63,7 +69,46 @@ DEVICE_COMMAND_PREFIX = '@dev '
 
 
 class DeviceCli:
-    """The CLI of the simulated TCAT Device."""
+    """The CLI of the TCAT Device. A subclass provides the transport to the device."""
+
+    PROMPT = '> '
+
+    def __init__(self):
+        self.lines = []
+        threading.Thread(target=self._read_output, daemon=True).start()
+
+    def _read_output(self):
+        raise NotImplementedError
+
+    def _add_line(self, line):
+        line = line.rstrip('\r\n')
+        while line.startswith(self.PROMPT):
+            line = line[len(self.PROMPT):]
+        if line:
+            self.lines.append(line)
+
+    def _write(self, text):
+        raise NotImplementedError
+
+    def close(self):
+        raise NotImplementedError
+
+    def cmd(self, command, timeout=5):
+        start = len(self.lines)
+        self._write(command + '\n')
+        end_time = time.time() + timeout
+        while time.time() < end_time:
+            if any(line.strip() == 'Done' or line.startswith('Error') for line in self.lines[start:]):
+                break
+            time.sleep(0.05)
+        # Leave out the echo of the command.
+        output = [line for line in self.lines[start:] if line != command]
+        print(f'[device] {command} -> {output}')
+        return output
+
+
+class SimulatedDeviceCli(DeviceCli):
+    """The CLI of a simulated TCAT Device: a process."""
 
     def __init__(self, args, cwd):
         # The device gets its own session, so that Ctrl-C in the terminal does not reach it.
@@ -76,25 +121,54 @@ class DeviceCli:
                                         bufsize=1,
                                         start_new_session=True)
         atexit.register(self.process.kill)
-        self.lines = []
-        threading.Thread(target=self._read_output, daemon=True).start()
+        super().__init__()
 
     def _read_output(self):
         for line in self.process.stdout:
-            self.lines.append(line.rstrip('\n'))
+            self._add_line(line)
 
-    def cmd(self, command, timeout=5):
-        start = len(self.lines)
-        self.process.stdin.write(command + '\n')
+    def _write(self, text):
+        self.process.stdin.write(text)
         self.process.stdin.flush()
-        end_time = time.time() + timeout
-        while time.time() < end_time:
-            if any(line.strip() == 'Done' or line.startswith('Error') for line in self.lines[start:]):
+
+    def close(self):
+        self.process.kill()
+
+
+class SerialDeviceCli(DeviceCli):
+    """The CLI of a real TCAT Device, on a serial port."""
+
+    def __init__(self, port):
+        self.fd = os.open(port, os.O_RDWR | os.O_NOCTTY)
+        tty.setraw(self.fd)
+        attributes = termios.tcgetattr(self.fd)
+        attributes[4] = attributes[5] = termios.B115200
+        termios.tcsetattr(self.fd, termios.TCSANOW, attributes)
+        super().__init__()
+
+        # End a partial line that the device may still have in its input buffer.
+        self._write('\n')
+        time.sleep(0.3)
+
+    def _read_output(self):
+        pending = ''
+        while True:
+            try:
+                data = os.read(self.fd, 4096)
+            except OSError:
                 break
-            time.sleep(0.05)
-        output = self.lines[start:]
-        print(f'[device] {command} -> {output}')
-        return output
+            if not data:
+                break
+            pending += data.decode(errors='replace')
+            *lines, pending = pending.split('\n')
+            for line in lines:
+                self._add_line(line)
+
+    def _write(self, text):
+        os.write(self.fd, text.replace('\n', '\r\n').encode())
+
+    def close(self):
+        os.close(self.fd)
 
 
 def host_cmd(command):
@@ -104,7 +178,13 @@ def host_cmd(command):
 
 
 def start_device():
-    device = DeviceCli([DEVICE_BIN, str(DEVICE_NODE_ID)], WORK_DIR + '/dev')
+    if DEVICE_PORT:
+        device = SerialDeviceCli(DEVICE_PORT)
+        # Unlike a simulated device, a real one still has the state of its previous use.
+        for command in ['tcat stop', 'thread stop']:
+            device.cmd(command)
+    else:
+        device = SimulatedDeviceCli([DEVICE_BIN, str(DEVICE_NODE_ID)], WORK_DIR + '/dev')
     for command in [f'panid {PANID}', f'channel {CHANNEL}', 'ifconfig up', 'tcat start']:
         device.cmd(command)
     return device
@@ -113,7 +193,10 @@ def start_device():
 def start_host():
     daemon_log = open(WORK_DIR + '/daemon.log', 'w')
     daemon_cmd = [DAEMON_BIN, '-v', '--data-path', WORK_DIR + '/daemon']
-    daemon_cmd += [f'spinel+hdlc+forkpty://{RCP_BIN}?forkpty-arg={RCP_NODE_ID}']
+    if RCP_PORT:
+        daemon_cmd += [f'spinel+hdlc+uart://{RCP_PORT}']
+    else:
+        daemon_cmd += [f'spinel+hdlc+forkpty://{RCP_BIN}?forkpty-arg={RCP_NODE_ID}']
     daemon = subprocess.Popen(daemon_cmd,
                               cwd=WORK_DIR + '/daemon',
                               stdout=daemon_log,
@@ -124,6 +207,8 @@ def start_host():
         if os.path.exists(DAEMON_SOCKET):
             break
         time.sleep(0.1)
+    else:
+        sys.exit(f'ot-daemon did not start: see {WORK_DIR}/daemon.log')
 
     # The host uses the channel and PAN ID of the TCAT Device, and allows link-layer unsecured communication on the
     # UDP port of TCAT, while Thread itself remains disabled.
@@ -204,6 +289,9 @@ def main():
         commands = sys.argv[1].split(';') if len(sys.argv) > 1 else ['hello']
         commissioner_args = sys.argv[2].split() if len(sys.argv) > 2 else ['--info']
 
+    if bool(RCP_PORT) != bool(DEVICE_PORT):
+        sys.exit('Set both RCP_PORT and DEV_PORT to use real hardware, or neither to simulate.')
+
     shutil.rmtree(WORK_DIR, ignore_errors=True)
     os.makedirs(WORK_DIR + '/dev')
     os.makedirs(WORK_DIR + '/daemon')
@@ -240,7 +328,7 @@ def main():
         capture.wait()
         print(f'---- packets captured in {PCAP} ----')
 
-    device.process.kill()
+    device.close()
     daemon.terminate()
     time.sleep(0.5)
     print('---- daemon log tail ----')

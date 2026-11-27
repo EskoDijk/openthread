@@ -30,6 +30,8 @@
 # End-to-end simulation test of TCAT over CoAPS, without needing root:
 #   TCAT Commissioner (bbtc.py --coaps) -> wpan0 (ot-daemon + simulated RCP) -> simulated TCAT Device (ot-cli-ftd).
 #
+# With RCP_PORT and DEV_PORT set to serial ports, it uses a real RCP and a real TCAT Device instead.
+#
 # Usage, scripted:
 #   PANID=0xc64e CHANNEL=18 ./tools/tcat-coaps-sim-test/run.sh "hello;commission;thread start" ["bbtc args"]
 #

@@ -13,6 +13,9 @@ It has two modes: a scripted one that types a given list of commands into the
 commissioner, and an interactive one in which you use the commissioner CLI
 yourself.
 
+The same test can also run over a real radio link, with a real RCP and a real
+TCAT Device: see "Usage: real hardware".
+
 It is not a pass/fail test: it prints the output of all three parts and you
 read the result. There are no assertions, so a failed command only shows up in
 the printed output.
@@ -77,6 +80,55 @@ The CLI of the TCAT Device cannot be reached in this mode. Use DEV_POST to
 query the device afterwards, or DEV_LOG to see its CLI output.
 
 
+Usage: real hardware
+--------------------
+
+With RCP_PORT and DEV_PORT set to two serial ports, the test uses real hardware
+instead of the simulated RCP and the simulated TCAT Device:
+
+    TCAT Commissioner        host interface                 TCAT Device
+    bbtc.py --coaps   --->   wpan0                   --->   ot-cli-ftd
+                             (ot-daemon + RCP on            (CLI on
+                              RCP_PORT)                      DEV_PORT)
+
+    RCP_PORT=/dev/ttyACM2 DEV_PORT=/dev/ttyACM1 PANID=0xc64e CHANNEL=18 \
+        ./tools/tcat-coaps-sim-test/run.sh "hello;commission;thread start"
+
+The arguments and the other environment variables work as in simulation: this
+includes -i, "@dev " commands, PCAP and SSLKEYLOGFILE. Of the builds listed
+under "Prerequisites" only the posix build is needed. Root/sudo is still not
+needed, as long as your user can open both serial ports.
+
+The names /dev/ttyACM<n> can change when a device is plugged in again. The
+names under /dev/serial/by-id do not.
+
+Firmware:
+
+- RCP: an ot-rcp build for the board.
+
+- TCAT Device: an ot-cli-ftd build with -DOT_TCAT_COAPS=ON
+  -DOT_BLE_TCAT=OFF. Its TLS library must support the cipher suite
+  TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, as the mbedTLS configuration of
+  OpenThread does.
+
+This is tested with two nRF52840 dongles, using firmware built in ot-nrf528xx:
+
+    ./script/build nrf52840 soft_crypto -DOT_USB=ON -DOT_BOOTLOADER=USB \
+        -DOT_TCAT_COAPS=ON -DOT_BLE_TCAT=OFF -DOT_JOINER=ON -DOT_COAP=ON \
+        -DOT_SERVICE=ON
+
+The build type "soft_crypto" matters here: the other build types of
+ot-nrf528xx use a crypto library without AES-GCM.
+
+Unlike a simulated device, a real TCAT Device keeps its state between runs:
+
+- The test first runs "tcat stop" and "thread stop" on the device, before it
+  sets the PAN ID and the channel.
+
+- A dataset that was set with "commission" stays on the device. To start
+  clean, use "decommission", or "factoryreset" on the CLI of the device.
+
+
 Environment variables
 ---------------------
 
@@ -84,6 +136,12 @@ Environment variables
                 tools/tcat_ble_client)
     PANID       PAN ID set on both the device and the host (default 0xface)
     CHANNEL     channel set on both the device and the host (default 11)
+    RCP_PORT    serial port of a real RCP, to use instead of the simulated
+                one. Radio URL parameters can be appended, for example
+                "/dev/ttyUSB0?uart-baudrate=115200".
+    DEV_PORT    serial port (115200 baud) of the CLI of a real TCAT Device, to
+                use instead of the simulated one. Set both RCP_PORT and
+                DEV_PORT, or neither.
     BUILD_DIR   where the builds are (default <repo>/build/tcat-coaps)
     WORK_DIR    scratch directory (default /tmp/tcat-coaps-sim-test)
     DEV_BIN     alternative TCAT Device binary (default: sim-coaps ot-cli-ftd)
@@ -174,12 +232,13 @@ What e2e.py does
 
 1. Starts the TCAT Device: the simulated ot-cli-ftd as node 1, then the CLI
    commands "panid", "channel", "ifconfig up" and "tcat start", and reads the
-   device's link-local address.
+   device's link-local address. With real hardware, it opens the serial port
+   of the device CLI instead of starting a process.
 
-2. Starts the host side: ot-daemon with the simulated ot-rcp as node 2, which
-   creates wpan0. Using ot-ctl it sets the same channel and PAN ID, runs
-   "ifconfig up", and runs "unsecureport add 5684" so that the link-layer
-   unsecured DTLS traffic passes the host's IPv6 filter.
+2. Starts the host side: ot-daemon with the simulated ot-rcp as node 2, or
+   with the real RCP, which creates wpan0. Using ot-ctl it sets the same
+   channel and PAN ID, runs "ifconfig up", and runs "unsecureport add 5684" so
+   that the link-layer unsecured DTLS traffic passes the host's IPv6 filter.
 
 3. Runs the commissioner: "bbtc.py --coaps <device link-local> --interface
    wpan0".
