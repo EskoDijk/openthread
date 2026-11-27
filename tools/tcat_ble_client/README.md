@@ -100,6 +100,8 @@ Use `--port <PORT>` if the TCAT Device hosts TCAT on another UDP port. After the
 
 To decrypt a packet capture of the DTLS session, for example in Wireshark, set the `SSLKEYLOGFILE` environment variable to the name of a file. The TCAT Commissioner then appends the secrets of each DTLS session to this file.
 
+To try this out without hardware, see the simulation test in [tools/tcat-coaps-sim-test](../tcat-coaps-sim-test/README.txt).
+
 ## TCAT Commissioner CLI Commands
 
 The application supports the following interactive CLI commands:
