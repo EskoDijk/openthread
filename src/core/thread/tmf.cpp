@@ -147,7 +147,7 @@ bool Agent::HandleResource(const char *aUriPath, Msg &aMsg)
         Case(kUriMlr, BackboneRouter::Manager);
 #endif
 #endif
-#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#if OPENTHREAD_CONFIG_TCAT_ENABLE
         Case(kUriTcatEnable, MeshCoP::TcatAgent);
 #endif
 

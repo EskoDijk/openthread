@@ -286,6 +286,17 @@
 #endif
 
 /**
+ * @def OPENTHREAD_CONFIG_TCAT_COAPS_ENABLE
+ *
+ * Define to 1 to enable TCAT over CoAPS support, i.e. TCAT using CoAP over DTLS over UDP on the Thread interface.
+ *
+ * This is an experimental feature. It cannot be enabled together with `OPENTHREAD_CONFIG_BLE_TCAT_ENABLE`.
+ */
+#ifndef OPENTHREAD_CONFIG_TCAT_COAPS_ENABLE
+#define OPENTHREAD_CONFIG_TCAT_COAPS_ENABLE 0
+#endif
+
+/**
  * @def OPENTHREAD_CONFIG_HEAP_INTERNAL_SIZE
  *
  * The size of heap buffer when DTLS is enabled.
@@ -294,7 +305,7 @@
 #if OPENTHREAD_CONFIG_SRP_SERVER_ENABLE
 // Internal heap doesn't support size larger than 64K bytes.
 #define OPENTHREAD_CONFIG_HEAP_INTERNAL_SIZE (63 * 1024)
-#elif OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE
+#elif OPENTHREAD_CONFIG_COAP_SECURE_API_ENABLE || OPENTHREAD_CONFIG_TCAT_COAPS_ENABLE
 #define OPENTHREAD_CONFIG_HEAP_INTERNAL_SIZE (3136 * sizeof(void *))
 #else
 #define OPENTHREAD_CONFIG_HEAP_INTERNAL_SIZE (1616 * sizeof(void *))
@@ -586,6 +597,23 @@
 #ifndef OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
 #define OPENTHREAD_CONFIG_BLE_TCAT_ENABLE 0
 #endif
+
+#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE && OPENTHREAD_CONFIG_TCAT_COAPS_ENABLE
+#error "OPENTHREAD_CONFIG_BLE_TCAT_ENABLE and OPENTHREAD_CONFIG_TCAT_COAPS_ENABLE cannot both be enabled."
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_TCAT_ENABLE
+ *
+ * Indicates whether TCAT is enabled, using any of the TCAT transports.
+ *
+ * This is a derived configuration that must not be defined directly. Use the configuration of a specific TCAT
+ * transport instead, i.e. `OPENTHREAD_CONFIG_BLE_TCAT_ENABLE` or `OPENTHREAD_CONFIG_TCAT_COAPS_ENABLE`.
+ */
+#ifdef OPENTHREAD_CONFIG_TCAT_ENABLE
+#error "OPENTHREAD_CONFIG_TCAT_ENABLE must not be defined directly, it is derived from the TCAT transport configs."
+#endif
+#define OPENTHREAD_CONFIG_TCAT_ENABLE (OPENTHREAD_CONFIG_BLE_TCAT_ENABLE || OPENTHREAD_CONFIG_TCAT_COAPS_ENABLE)
 
 /**
  * @def OPENTHREAD_CONFIG_PLATFORM_LOG_CRASH_DUMP_ENABLE

@@ -86,6 +86,7 @@ set(COMMON_SOURCES
     api/srp_client_api.cpp
     api/srp_client_buffers_api.cpp
     api/srp_server_api.cpp
+    api/tcat_api.cpp
     api/steering_data_api.cpp
     api/tasklet_api.cpp
     api/tcp_api.cpp
@@ -188,6 +189,7 @@ set(COMMON_SOURCES
     meshcop/seeker.cpp
     meshcop/steering_data.cpp
     meshcop/tcat_agent.cpp
+    meshcop/tcat_coaps_server.cpp
     meshcop/timestamp.cpp
     net/checksum.cpp
     net/dhcp6_client.cpp

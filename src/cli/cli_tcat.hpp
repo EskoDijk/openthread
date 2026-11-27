@@ -35,7 +35,7 @@
 
 #include "cli/cli_utils.hpp"
 
-#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE && OPENTHREAD_CONFIG_CLI_BLE_SECURE_ENABLE
+#if OPENTHREAD_CONFIG_TCAT_ENABLE && OPENTHREAD_CONFIG_CLI_TCAT_ENABLE
 
 namespace ot {
 
@@ -75,6 +75,8 @@ public:
 private:
     using Command = CommandEntry<Tcat>;
 
+    static constexpr uint16_t kUdpPort = 5684; // For a TCAT transport that uses UDP (not used for TCAT over BLE).
+
     template <CommandId kCommandId> otError Process(Arg aArgs[]);
 
     otTcatVendorInfo mVendorInfo;
@@ -85,6 +87,6 @@ private:
 
 } // namespace ot
 
-#endif // OPENTHREAD_CONFIG_BLE_TCAT_ENABLE && OPENTHREAD_CONFIG_CLI_BLE_SECURE_ENABLE
+#endif // OPENTHREAD_CONFIG_TCAT_ENABLE && OPENTHREAD_CONFIG_CLI_TCAT_ENABLE
 
 #endif // OT_CLI_CLI_TCAT_HPP_

@@ -1,8 +1,8 @@
 # OpenThread CLI - TCAT Example
 
-The OpenThread BLE-Secure/TCAT APIs may be invoked via the OpenThread CLI for testing purposes.
+The OpenThread TCAT APIs may be invoked via the OpenThread CLI for testing purposes.
 
-> Note: in the present example, only TCAT over BLE is implemented.
+> Note: the TCAT transport is selected at build time: either TCAT over BLE (`OT_BLE_TCAT`), or the experimental TCAT over CoAPS (`OT_TCAT_COAPS`). For TCAT over CoAPS, the TCAT agent is hosted on UDP port 5684 of the Thread interface and the commands related to BLE advertisements have no effect.
 
 ## Command List
 

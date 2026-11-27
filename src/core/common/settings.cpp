@@ -258,7 +258,7 @@ void Settings::DeleteOperationalDataset(MeshCoP::Dataset::Type aType)
     Log(kActionDelete, error, key);
 }
 
-#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#if OPENTHREAD_CONFIG_TCAT_ENABLE
 void Settings::SaveTcatCommissionerCertificate(const uint8_t *aCert, uint16_t aCertLen)
 {
     Error error = Get<SettingsDriver>().Set(kKeyTcatCommrCert, aCert, aCertLen);

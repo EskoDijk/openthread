@@ -32,7 +32,7 @@
  *  This file defines the top-level functions for the OpenThread TCAT.
  *
  *  @note
- *   The functions in this module require the build-time feature `OPENTHREAD_CONFIG_BLE_TCAT_ENABLE=1`.
+ *   The functions in this module require the build-time feature `OPENTHREAD_CONFIG_TCAT_ENABLE=1`.
  *
  *  @note
  *   To enable the required cipher suite TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
@@ -60,7 +60,7 @@ extern "C" {
  *   This module includes functions that implement TCAT communication.
  *
  *   The functions in this module are available when TCAT feature
- *   (`OPENTHREAD_CONFIG_BLE_TCAT_ENABLE`) is enabled.
+ *   (`OPENTHREAD_CONFIG_TCAT_ENABLE`) is enabled.
  *
  * @{
  */
@@ -305,6 +305,148 @@ typedef struct otTcatVendorInfo
     otHandleTcatTlvSupport mTlvSupportHandler; ///< Optional pointer to a function to control TCAT TLV support
 
 } otTcatVendorInfo;
+
+/**
+ * @}
+ */
+
+/**
+ * @defgroup api-tcat-generic TCAT generic API
+ *
+ * @brief
+ *   Transport-agnostic TCAT functions. These are available whenever a TCAT transport is enabled
+ *   (`OPENTHREAD_CONFIG_TCAT_ENABLE`) and operate on the TCAT transport that is selected at build time.
+ *
+ * @{
+ */
+
+/**
+ * Sets the TCAT vendor info used by the TCAT agent.
+ *
+ * Must be called before starting TCAT using #otTcatStart. It may be called again while the TCAT agent is started
+ * to update the vendor info. The pointed-to structure must remain valid for the lifetime of the TCAT agent.
+ *
+ * @param[in] aInstance    A pointer to an OpenThread instance.
+ * @param[in] aVendorInfo  A pointer to the vendor info.
+ *
+ * @retval OT_ERROR_NONE          Successfully set the vendor info.
+ * @retval OT_ERROR_INVALID_ARGS  The vendor info is invalid.
+ */
+otError otTcatSetVendorInfo(otInstance *aInstance, const otTcatVendorInfo *aVendorInfo);
+
+/**
+ * Sets the own X.509 certificate and corresponding private key that the TCAT transport uses to authenticate to a
+ * TCAT Commissioner.
+ *
+ * @param[in] aInstance          A pointer to an OpenThread instance.
+ * @param[in] aX509Cert          A pointer to the PEM formatted X.509 certificate.
+ * @param[in] aX509Length        The length of the certificate, including the null terminator.
+ * @param[in] aPrivateKey        A pointer to the PEM formatted private key.
+ * @param[in] aPrivateKeyLength  The length of the private key, including the null terminator.
+ */
+void otTcatSetCertificate(otInstance    *aInstance,
+                          const uint8_t *aX509Cert,
+                          uint32_t       aX509Length,
+                          const uint8_t *aPrivateKey,
+                          uint32_t       aPrivateKeyLength);
+
+/**
+ * Sets the trusted top level CAs that the TCAT transport uses to validate the certificate of a TCAT Commissioner.
+ *
+ * @param[in] aInstance                A pointer to an OpenThread instance.
+ * @param[in] aX509CaCertificateChain  A pointer to the PEM formatted X.509 CA chain.
+ * @param[in] aX509CaCertChainLength   The length of the chain, including the null terminator.
+ */
+void otTcatSetCaCertificateChain(otInstance    *aInstance,
+                                 const uint8_t *aX509CaCertificateChain,
+                                 uint32_t       aX509CaCertChainLength);
+
+/**
+ * Sets the authentication mode of the TCAT transport.
+ *
+ * @param[in] aInstance               A pointer to an OpenThread instance.
+ * @param[in] aVerifyPeerCertificate  TRUE to verify the certificate of the TCAT Commissioner, FALSE otherwise.
+ */
+void otTcatSetSslAuthMode(otInstance *aInstance, bool aVerifyPeerCertificate);
+
+/**
+ * Starts the TCAT agent and the TCAT transport.
+ *
+ * The vendor info and certificates must be set beforehand, using #otTcatSetVendorInfo, #otTcatSetCertificate
+ * and #otTcatSetCaCertificateChain.
+ *
+ * @param[in] aInstance        A pointer to an OpenThread instance.
+ * @param[in] aUdpPort         The UDP port on which TCAT is hosted, in case of a TCAT transport that uses UDP.
+ *                             Ignored by the TCAT over BLE transport.
+ * @param[in] aAppDataHandler  A pointer to a function that is called when TCAT application data is received.
+ *                             May be NULL.
+ * @param[in] aJoinHandler     A pointer to a function that is called when a network join or leave operation is
+ *                             performed under guidance of the TCAT Commissioner. May be NULL.
+ *
+ * @retval OT_ERROR_NONE     Successfully started the TCAT agent.
+ * @retval OT_ERROR_ALREADY  The TCAT agent or its transport was already started.
+ * @retval OT_ERROR_FAILED   The vendor info was not set, or the transport could not be started.
+ */
+otError otTcatStart(otInstance                        *aInstance,
+                    uint16_t                           aUdpPort,
+                    otHandleTcatApplicationDataReceive aAppDataHandler,
+                    otHandleTcatJoin                   aJoinHandler);
+
+/**
+ * Stops the TCAT agent and the TCAT transport.
+ *
+ * TCAT can be started again using #otTcatStart.
+ *
+ * @param[in] aInstance  A pointer to an OpenThread instance.
+ */
+void otTcatStop(otInstance *aInstance);
+
+/**
+ * Indicates whether the TCAT agent is started.
+ *
+ * @param[in] aInstance  A pointer to an OpenThread instance.
+ *
+ * @retval TRUE   The TCAT agent is started.
+ * @retval FALSE  The TCAT agent is not started.
+ */
+bool otTcatIsAgentStarted(otInstance *aInstance);
+
+/**
+ * Sets the TCAT agent to the active or standby state.
+ *
+ * @param[in] aInstance    A pointer to an OpenThread instance.
+ * @param[in] aActive      TRUE to activate TCAT, FALSE to set TCAT to standby.
+ * @param[in] aDelayMs     The delay in milliseconds before activating (0 = immediately). Ignored for standby.
+ * @param[in] aDurationMs  The duration in milliseconds to remain active (0 = indefinitely). Ignored for standby.
+ *
+ * @retval OT_ERROR_NONE           Successfully set the TCAT agent state.
+ * @retval OT_ERROR_INVALID_STATE  The TCAT agent is not started, or the requested activation is not possible
+ *                                 while a TCAT Commissioner is connected.
+ */
+otError otTcatSetAgentState(otInstance *aInstance, bool aActive, uint32_t aDelayMs, uint32_t aDurationMs);
+
+/**
+ * Sends a TCAT application TLV to the connected TCAT Commissioner.
+ *
+ * For the TCAT over CoAPS transport, this function can only be called from within the
+ * #otHandleTcatApplicationDataReceive callback: the TLV is then added to the response to the TCAT Commissioner's
+ * request that is being handled.
+ *
+ * @param[in] aInstance             A pointer to an OpenThread instance.
+ * @param[in] aApplicationProtocol  The application protocol (TLV type) of the TLV to send.
+ * @param[in] aBuf                  A pointer to the TLV value.
+ * @param[in] aLength               The length of the TLV value in bytes.
+ *
+ * @retval OT_ERROR_NONE           Successfully enqueued the TLV for sending.
+ * @retval OT_ERROR_NO_BUFS        Failed to allocate buffer memory.
+ * @retval OT_ERROR_INVALID_STATE  No TCAT Commissioner is connected, or no response is being composed.
+ * @retval OT_ERROR_REJECTED       The application protocol is a response with data or status, but no response is
+ *                                 pending.
+ */
+otError otTcatSendApplicationTlv(otInstance               *aInstance,
+                                 otTcatApplicationProtocol aApplicationProtocol,
+                                 uint8_t                  *aBuf,
+                                 uint16_t                  aLength);
 
 /**
  * @}
