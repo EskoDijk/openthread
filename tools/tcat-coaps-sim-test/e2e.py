@@ -177,6 +177,19 @@ def host_cmd(command):
     print(f'[host] {command} -> {result.stdout.splitlines()} {result.stderr.strip()}')
 
 
+def set_device_parameter(device, name, value):
+    """Sets the PAN ID or the channel of the TCAT Device, unless the device already uses the value."""
+    # Setting these erases the Active Operational Dataset of the device. This check keeps the dataset of a real
+    # device that was commissioned in an earlier run, with the same PAN ID and channel.
+    for line in device.cmd(name):
+        try:
+            if int(line, 0) == int(value, 0):
+                return
+        except ValueError:
+            pass
+    device.cmd(f'{name} {value}')
+
+
 def start_device():
     if DEVICE_PORT:
         device = SerialDeviceCli(DEVICE_PORT)
@@ -185,7 +198,9 @@ def start_device():
             device.cmd(command)
     else:
         device = SimulatedDeviceCli([DEVICE_BIN, str(DEVICE_NODE_ID)], WORK_DIR + '/dev')
-    for command in [f'panid {PANID}', f'channel {CHANNEL}', 'ifconfig up', 'tcat start']:
+    set_device_parameter(device, 'panid', PANID)
+    set_device_parameter(device, 'channel', CHANNEL)
+    for command in ['ifconfig up', 'tcat start']:
         device.cmd(command)
     return device
 

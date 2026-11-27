@@ -122,11 +122,14 @@ ot-nrf528xx use a crypto library without AES-GCM.
 
 Unlike a simulated device, a real TCAT Device keeps its state between runs:
 
-- The test first runs "tcat stop" and "thread stop" on the device, before it
-  sets the PAN ID and the channel.
+- The test first runs "tcat stop" and "thread stop" on the device.
 
-- A dataset that was set with "commission" stays on the device. To start
-  clean, use "decommission", or "factoryreset" on the CLI of the device.
+- The test only sets the PAN ID and the channel on the device if the device
+  uses other values, because setting these with the CLI erases the Active
+  Operational Dataset of the device. So a device that was commissioned in an
+  earlier run stays commissioned if PANID and CHANNEL match its dataset, and
+  loses its dataset otherwise. To start clean, use "decommission", or
+  "factoryreset" on the CLI of the device.
 
 
 Environment variables
@@ -231,9 +234,10 @@ What e2e.py does
 ----------------
 
 1. Starts the TCAT Device: the simulated ot-cli-ftd as node 1, then the CLI
-   commands "panid", "channel", "ifconfig up" and "tcat start", and reads the
-   device's link-local address. With real hardware, it opens the serial port
-   of the device CLI instead of starting a process.
+   commands "panid" and "channel" (if the values differ), "ifconfig up" and
+   "tcat start", and reads the device's link-local address. With real
+   hardware, it opens the serial port of the device CLI instead of starting a
+   process.
 
 2. Starts the host side: ot-daemon with the simulated ot-rcp as node 2, or
    with the real RCP, which creates wpan0. Using ot-ctl it sets the same
